@@ -1,0 +1,1926 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Quittance — gestion locative</title>
+<meta name="description" content="Gestion locative simple : quittances, baux et états des lieux. Vos données restent dans votre navigateur.">
+<meta name="theme-color" content="#12665a">
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="icon" href="./icone-192.png" sizes="192x192">
+<link rel="apple-touch-icon" href="./icone-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Public+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap">
+<style>
+  :root {
+    color-scheme: light dark;
+    --paper: #eef1f0;
+    --surface: #ffffff;
+    --surface-2: #f6f8f7;
+    --ink: #111d1a;
+    --ink-soft: #5b6b66;
+    --line: #d2dad7;
+    --line-strong: #b4c0bc;
+    --accent: #12665a;
+    --accent-soft: #e2efec;
+    --warn: #8f3a2c;
+    --warn-soft: #f7e9e5;
+    --radius: 10px;
+    box-sizing: border-box;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  :root:not([data-theme="light"]) {
+    @media (prefers-color-scheme: dark) {
+      --paper: #101614;
+      --surface: #18201e;
+      --surface-2: #1e2725;
+      --ink: #e8efec;
+      --ink-soft: #9fb0ab;
+      --line: #2c3835;
+      --line-strong: #3d4c48;
+      --accent: #59b8a5;
+      --accent-soft: #1b2e2b;
+      --warn: #e09183;
+      --warn-soft: #33221e;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #101614;
+    --surface: #18201e;
+    --surface-2: #1e2725;
+    --ink: #e8efec;
+    --ink-soft: #9fb0ab;
+    --line: #2c3835;
+    --line-strong: #3d4c48;
+    --accent: #59b8a5;
+    --accent-soft: #1b2e2b;
+    --warn: #e09183;
+    --warn-soft: #33221e;
+  }
+  *, *::before, *::after { box-sizing: border-box; }
+  html { scroll-padding-top: env(safe-area-inset-top, 0px); }
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: 'Public Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 15px;
+    line-height: 1.45;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--accent); }
+  .shell { max-width: 1120px; margin: 0 auto; padding: 20px 18px 64px; }
+  header.top {
+    display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px 18px;
+    padding-bottom: 14px; border-bottom: 2px solid var(--ink);
+  }
+  .wordmark { font-size: 21px; font-weight: 700; letter-spacing: -0.015em; margin: 0; }
+  .wordmark span { font-weight: 400; color: var(--ink-soft); }
+  .storage-state { margin-left: auto; font-size: 12.5px; color: var(--ink-soft); }
+  .storage-state b { font-weight: 600; color: var(--ink); }
+  nav.tabs { display: flex; flex-wrap: wrap; gap: 2px; margin: 14px 0 22px; }
+  nav.tabs button {
+    font: inherit; font-size: 14px; font-weight: 500;
+    background: transparent; color: var(--ink-soft);
+    border: 1px solid transparent; border-radius: var(--radius);
+    padding: 9px 14px; min-height: 44px; cursor: pointer;
+  }
+  nav.tabs button:hover { color: var(--ink); background: var(--surface-2); }
+  nav.tabs button[aria-current="page"] { background: var(--surface); color: var(--ink); border-color: var(--line); font-weight: 600; }
+  nav.tabs button:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, a:focus-visible {
+    outline: 2px solid var(--accent); outline-offset: 2px;
+  }
+  h2.view-title { font-size: 22px; margin: 0 0 4px; letter-spacing: -0.01em; }
+  p.view-intro { margin: 0 0 20px; color: var(--ink-soft); max-width: 68ch; }
+  section.panel {
+    background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 18px 18px 20px; margin-bottom: 18px;
+  }
+  section.panel > h3 { margin: 0 0 14px; font-size: 16px; font-weight: 600; }
+  .row-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+  button.btn {
+    font: inherit; font-size: 14px; font-weight: 600; cursor: pointer;
+    background: var(--accent); color: #fff; border: 1px solid var(--accent);
+    border-radius: 8px; padding: 10px 15px; min-height: 44px;
+  }
+  :root[data-theme="dark"] button.btn, :root:not([data-theme="light"]) button.btn { color: #06120f; }
+  button.btn:hover { filter: brightness(1.08); }
+  button.btn.ghost { background: var(--surface); color: var(--ink); border-color: var(--line-strong); }
+  button.btn.ghost:hover { background: var(--surface-2); filter: none; }
+  button.btn.quiet {
+    background: transparent; color: var(--ink-soft); border-color: transparent;
+    padding: 6px 8px; min-height: 36px; font-weight: 500; text-decoration: underline;
+  }
+  button.btn.quiet:hover { color: var(--ink); filter: none; }
+  button.btn:disabled { opacity: 0.45; cursor: not-allowed; filter: none; }
+  .grid-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px 14px; }
+  label.field { display: flex; flex-direction: column; gap: 5px; font-size: 13px; color: var(--ink-soft); }
+  label.field input, label.field select, label.field textarea {
+    font: inherit; font-size: 15px; color: var(--ink);
+    background: var(--surface-2); border: 1px solid var(--line-strong);
+    border-radius: 8px; padding: 10px 11px; min-height: 44px; width: 100%;
+  }
+  label.check { display: flex; align-items: flex-start; gap: 9px; font-size: 13.5px; color: var(--ink); }
+  label.check input { width: 18px; height: 18px; margin-top: 2px; }
+  table.ledger { width: 100%; border-collapse: collapse; font-size: 14.5px; }
+  table.ledger th {
+    text-align: left; font-weight: 600; font-size: 12.5px; color: var(--ink-soft);
+    border-bottom: 1px solid var(--line-strong); padding: 0 10px 8px 0;
+  }
+  table.ledger td { padding: 11px 10px 11px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+  table.ledger tr:last-child td { border-bottom: none; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; padding-right: 0; }
+  .scroll-x { overflow-x: auto; }
+  .tag { display: inline-block; font-size: 12px; font-weight: 600; border-radius: 999px; padding: 3px 9px; white-space: nowrap; }
+  .tag.ok { background: var(--accent-soft); color: var(--accent); }
+  .tag.late { background: var(--warn-soft); color: var(--warn); }
+  .tag.part { background: var(--surface-2); color: var(--ink-soft); border: 1px solid var(--line-strong); }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px; }
+  .stat { border-left: 3px solid var(--line-strong); padding-left: 12px; }
+  .stat.is-accent { border-left-color: var(--accent); }
+  .stat.is-warn { border-left-color: var(--warn); }
+  .stat .k { font-size: 12.5px; color: var(--ink-soft); }
+  .stat .v { font-size: 25px; font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+  .empty { color: var(--ink-soft); font-size: 14.5px; }
+  .month-nav { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
+  .month-nav .label { font-weight: 600; font-size: 17px; min-width: 190px; }
+  .hint { font-size: 13px; color: var(--ink-soft); margin: 10px 0 0; }
+  .list-line { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: baseline; padding: 11px 0; border-bottom: 1px solid var(--line); }
+  .list-line:last-child { border-bottom: none; }
+  .list-line .name { font-weight: 600; }
+  .list-line .meta { color: var(--ink-soft); font-size: 13.5px; }
+  .list-line .push { margin-left: auto; display: flex; gap: 6px; }
+  dialog {
+    border: 1px solid var(--line-strong); border-radius: var(--radius); padding: 0;
+    background: var(--surface); color: var(--ink); max-width: 520px; width: calc(100% - 32px);
+  }
+  dialog::backdrop { background: rgba(8, 20, 17, 0.45); }
+  .dialog-body { padding: 20px; }
+  .dialog-body h3 { margin: 0 0 14px; font-size: 18px; }
+  .toast {
+    position: fixed; left: 50%; transform: translateX(-50%);
+    bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+    background: var(--ink); color: var(--paper); padding: 11px 16px; border-radius: 8px;
+    font-size: 14px; font-weight: 500; max-width: 90%; z-index: 40;
+  }
+  .toast[hidden] { display: none; }
+  .split { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  @media (max-width: 720px) {
+    .split { grid-template-columns: 1fr; }
+    .month-nav .label { min-width: 0; font-size: 15px; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+</style>
+</head>
+<body>
+<div class="shell">
+  <header class="top">
+    <h1 class="wordmark">Quittance<span> · gestion locative</span></h1>
+    <div class="storage-state" id="storage-state">Chargement…</div>
+  </header>
+  <nav class="tabs" id="tabs" aria-label="Sections"></nav>
+  <main id="view" tabindex="-1"></main>
+</div>
+<dialog id="modal"><div class="dialog-body" id="modal-body"></div></dialog>
+<div class="toast" id="toast" role="status" hidden></div>
+
+<script>
+(function () {
+  'use strict';
+
+  /* ---------------------------------------------------------------- outils */
+
+  var MOIS = ['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];
+
+  function uid(prefix) {
+    return prefix + '_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+  }
+  function esc(s) {
+    return String(s === undefined || s === null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+  function centsFromInput(value) {
+    var s = String(value === undefined || value === null ? '' : value).replace(/\s/g, '').replace(',', '.');
+    var n = parseFloat(s);
+    if (isNaN(n) || n < 0) return 0;
+    return Math.round(n * 100);
+  }
+  function euros(cents) {
+    var neg = cents < 0;
+    var v = Math.abs(Math.round(cents || 0));
+    var unit = Math.floor(v / 100);
+    var dec = String(v % 100).padStart(2, '0');
+    var str = String(unit).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+    return (neg ? '-' : '') + str + ',' + dec + ' €';
+  }
+  function eurosInput(cents) {
+    return ((cents || 0) / 100).toFixed(2).replace('.', ',');
+  }
+  function todayISO() {
+    var d = new Date();
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  }
+  function currentMonth() { return todayISO().slice(0, 7); }
+  function monthLabel(m) {
+    if (!m) return '';
+    var p = m.split('-');
+    return MOIS[parseInt(p[1], 10) - 1] + ' ' + p[0];
+  }
+  function daysInMonth(m) {
+    var p = m.split('-');
+    return new Date(parseInt(p[0], 10), parseInt(p[1], 10), 0).getDate();
+  }
+  function addMonths(m, delta) {
+    var p = m.split('-');
+    var d = new Date(parseInt(p[0], 10), parseInt(p[1], 10) - 1 + delta, 1);
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+  }
+  function frDate(iso) {
+    if (!iso) return '';
+    var p = iso.split('-');
+    if (p.length < 3) return iso;
+    return p[2] + '/' + p[1] + '/' + p[0];
+  }
+  function frDateLong(iso) {
+    if (!iso) return '';
+    var p = iso.split('-');
+    if (p.length < 3) return iso;
+    var jour = parseInt(p[2], 10);
+    return (jour === 1 ? '1er' : String(jour)) + ' ' + MOIS[parseInt(p[1], 10) - 1] + ' ' + p[0];
+  }
+  function monthStart(m) { return m + '-01'; }
+  function monthEnd(m) { return m + '-' + String(daysInMonth(m)).padStart(2, '0'); }
+
+  /* --------------------------------------------------------- générateur PDF */
+
+  var HELV_W = (function () {
+    var w = {};
+    var base = {
+      ' ':278,'!':278,'"':355,'#':556,'$':556,'%':889,'&':667,"'":191,'(':333,')':333,
+      '*':389,'+':584,',':278,'-':333,'.':278,'/':278,'0':556,'1':556,'2':556,'3':556,
+      '4':556,'5':556,'6':556,'7':556,'8':556,'9':556,':':278,';':278,'<':584,'=':584,
+      '>':584,'?':556,'@':1015,'A':667,'B':667,'C':722,'D':722,'E':667,'F':611,'G':778,
+      'H':722,'I':278,'J':500,'K':667,'L':556,'M':833,'N':722,'O':778,'P':667,'Q':778,
+      'R':722,'S':667,'T':611,'U':722,'V':667,'W':944,'X':667,'Y':667,'Z':611,'[':278,
+      '\\':278,']':278,'^':469,'_':556,'`':333,'a':556,'b':556,'c':500,'d':556,'e':556,
+      'f':278,'g':556,'h':556,'i':222,'j':222,'k':500,'l':222,'m':833,'n':556,'o':556,
+      'p':556,'q':556,'r':333,'s':500,'t':278,'u':556,'v':500,'w':722,'x':500,'y':500,
+      'z':500,'{':334,'|':260,'}':334,'~':584,'\u20AC':556,'\u2019':191,'\u2018':191,
+      '\u201C':333,'\u201D':333,'\u2013':556,'\u2014':1000,'\u0153':944,'\u2026':1000,
+      '\u00B0':400,'\u00A0':278,'\u00E9':556,'\u00E8':556,'\u00EA':556,'\u00EB':556,
+      '\u00E0':556,'\u00E2':556,'\u00E7':500,'\u00F4':556,'\u00F6':556,'\u00FB':556,
+      '\u00F9':556,'\u00EE':278,'\u00EF':278,'\u00C9':667,'\u00C8':667,'\u00C0':667
+    };
+    for (var k in base) { if (Object.prototype.hasOwnProperty.call(base, k)) w[k] = base[k]; }
+    return w;
+  })();
+
+  var WINANSI = {
+    '\u20AC':0x80,'\u201A':0x82,'\u0192':0x83,'\u201E':0x84,'\u2026':0x85,'\u2020':0x86,
+    '\u2021':0x87,'\u02C6':0x88,'\u2030':0x89,'\u0160':0x8A,'\u2039':0x8B,'\u0152':0x8C,
+    '\u017D':0x8E,'\u2018':0x91,'\u2019':0x92,'\u201C':0x93,'\u201D':0x94,'\u2022':0x95,
+    '\u2013':0x96,'\u2014':0x97,'\u02DC':0x98,'\u2122':0x99,'\u0161':0x9A,'\u203A':0x9B,
+    '\u0153':0x9C,'\u017E':0x9E,'\u0178':0x9F
+  };
+
+  function pdfWidth(s, size, bold) {
+    var total = 0;
+    var str = String(s);
+    for (var i = 0; i < str.length; i++) {
+      var u = HELV_W[str.charAt(i)];
+      total += (u === undefined ? 556 : u);
+    }
+    if (bold) total *= 1.06;
+    return (total / 1000) * size;
+  }
+  function pdfEscape(s) {
+    return String(s).replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)');
+  }
+  function pdfBytes(str) {
+    var out = [];
+    for (var i = 0; i < str.length; i++) {
+      var ch = str.charAt(i);
+      var mapped = WINANSI[ch];
+      if (mapped !== undefined) { out.push(mapped); continue; }
+      var c = str.charCodeAt(i);
+      out.push(c <= 0xff ? c : 63);
+    }
+    return out;
+  }
+  function pdfWrap(s, maxWidth, size, bold) {
+    var words = String(s).split(' ');
+    var lines = [];
+    var line = '';
+    for (var i = 0; i < words.length; i++) {
+      var test = line ? line + ' ' + words[i] : words[i];
+      if (pdfWidth(test, size, bold) > maxWidth && line) { lines.push(line); line = words[i]; }
+      else { line = test; }
+    }
+    if (line) lines.push(line);
+    return lines;
+  }
+  function pageContent(items) {
+    var content = '';
+    for (var i = 0; i < items.length; i++) {
+      var it = items[i];
+      if (it.t === 'line') {
+        content += 'q ' + (it.lw || 0.6) + ' w ' + it.x1 + ' ' + it.y1.toFixed(2) + ' m ' + it.x2 + ' ' + it.y2.toFixed(2) + ' l S Q\n';
+      } else if (it.t === 'box') {
+        content += 'q ' + (it.lw || 0.6) + ' w ' + it.x.toFixed(2) + ' ' + it.y.toFixed(2) + ' ' + it.w + ' ' + it.h + ' re S Q\n';
+      } else {
+        var size = it.size || 10;
+        var font = it.bold ? '/F2' : '/F1';
+        var x = it.x;
+        if (it.align === 'right') x = it.x - pdfWidth(it.s, size, it.bold);
+        else if (it.align === 'center') x = it.x - pdfWidth(it.s, size, it.bold) / 2;
+        content += 'BT ' + font + ' ' + size + ' Tf ' + x.toFixed(2) + ' ' + Number(it.y).toFixed(2) + ' Td (' + pdfEscape(it.s) + ') Tj ET\n';
+      }
+    }
+    return content;
+  }
+
+  function buildPdf(pages) {
+    if (!pages || !pages.length) pages = [[]];
+    if (!Array.isArray(pages[0])) pages = [pages];
+    var N = pages.length;
+    var fReg = 3 + 2 * N;
+    var fBold = 4 + 2 * N;
+    var objects = [];
+    var kids = [];
+    for (var i = 0; i < N; i++) kids.push((3 + 2 * i) + ' 0 R');
+    objects[1] = '<< /Type /Catalog /Pages 2 0 R >>';
+    objects[2] = '<< /Type /Pages /Kids [' + kids.join(' ') + '] /Count ' + N + ' >>';
+    for (var p = 0; p < N; p++) {
+      var c = pageContent(pages[p]);
+      objects[3 + 2 * p] = '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 ' + fReg + ' 0 R /F2 ' + fBold + ' 0 R >> >> /Contents ' + (4 + 2 * p) + ' 0 R >>';
+      objects[4 + 2 * p] = '<< /Length ' + pdfBytes(c).length + ' >>\nstream\n' + c + 'endstream';
+    }
+    objects[fReg] = '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>';
+    objects[fBold] = '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>';
+    var total = fBold;
+    var out = '%PDF-1.4\n';
+    var offsets = [];
+    for (var n = 1; n <= total; n++) {
+      offsets[n] = pdfBytes(out).length;
+      out += n + ' 0 obj\n' + objects[n] + '\nendobj\n';
+    }
+    var xrefPos = pdfBytes(out).length;
+    out += 'xref\n0 ' + (total + 1) + '\n0000000000 65535 f \n';
+    for (var m = 1; m <= total; m++) {
+      out += String(offsets[m]).padStart(10, '0') + ' 00000 n \n';
+    }
+    out += 'trailer\n<< /Size ' + (total + 1) + ' /Root 1 0 R >>\nstartxref\n' + xrefPos + '\n%%EOF\n';
+    return new Uint8Array(pdfBytes(out));
+  }
+
+  // Mise en page au fil de l'eau, pour les documents longs (bail, état des lieux).
+  function Flux() {
+    var M = 56, R = 539, HAUT = 792, BAS = 70;
+    var pages = [];
+    var items = [];
+    var y = HAUT;
+    function saut() { pages.push(items); items = []; y = HAUT; }
+    function place(h) { if (y - h < BAS) saut(); }
+    return {
+      M: M, R: R,
+      saut: saut,
+      espace: function (h) { y -= h; },
+      texte: function (s, o) {
+        o = o || {};
+        var size = o.size || 10;
+        var indent = o.indent || 0;
+        var lignes = pdfWrap(String(s), o.largeur || (R - M - indent), size, o.bold);
+        for (var i = 0; i < lignes.length; i++) {
+          place(size + 4);
+          items.push({ t: 'text', x: M + indent, y: y, s: lignes[i], size: size, bold: o.bold });
+          y -= size + (o.interligne === undefined ? 3.5 : o.interligne);
+        }
+        if (o.apres) y -= o.apres;
+      },
+      titre: function (s) {
+        place(40);
+        items.push({ t: 'text', x: M, y: y, s: s, size: 15, bold: true });
+        y -= 24;
+      },
+      section: function (s) {
+        place(34);
+        y -= 8;
+        items.push({ t: 'text', x: M, y: y, s: s, size: 11.5, bold: true });
+        y -= 16;
+      },
+      champ: function (label, valeur) {
+        var texte = label + ' : ' + (valeur === undefined || valeur === null || valeur === '' ? '……………………' : valeur);
+        this.texte(texte, { size: 10 });
+      },
+      trait: function () {
+        place(12);
+        items.push({ t: 'line', x1: M, y1: y + 6, x2: R, y2: y + 6, lw: 0.6 });
+        y -= 10;
+      },
+      aRemplir: function (label, largeur) {
+        place(22);
+        items.push({ t: 'text', x: M, y: y, s: label, size: 10 });
+        var x0 = M + pdfWidth(label, 10, false) + 8;
+        items.push({ t: 'line', x1: x0, y1: y - 2, x2: Math.min(R, x0 + (largeur || 220)), y2: y - 2, lw: 0.4 });
+        y -= 19;
+      },
+      enTeteGrille: function (labels, xs, obsX) {
+        place(20);
+        for (var i = 0; i < labels.length; i++) {
+          items.push({ t: 'text', x: xs[i], y: y, s: labels[i], size: 8, bold: true });
+        }
+        items.push({ t: 'text', x: obsX, y: y, s: 'Observations', size: 8, bold: true });
+        y -= 13;
+      },
+      grille: function (label, xs, obsX) {
+        place(19);
+        items.push({ t: 'text', x: M, y: y, s: label, size: 9.5 });
+        for (var i = 0; i < xs.length; i++) {
+          items.push({ t: 'box', x: xs[i], y: y - 1.5, w: 9, h: 9, lw: 0.5 });
+        }
+        items.push({ t: 'line', x1: obsX, y1: y - 2.5, x2: R, y2: y - 2.5, lw: 0.3 });
+        y -= 17;
+      },
+      signatures: function (colonnes) {
+        place(80);
+        y -= 20;
+        var largeur = (R - M) / colonnes.length;
+        for (var i = 0; i < colonnes.length; i++) {
+          items.push({ t: 'text', x: M + i * largeur, y: y, s: colonnes[i], size: 9.5, bold: true });
+          items.push({ t: 'box', x: M + i * largeur, y: y - 62, w: largeur - 16, h: 55, lw: 0.4 });
+        }
+        y -= 78;
+      },
+      coche: function (label, note) {
+        place(note ? 32 : 22);
+        items.push({ t: 'box', x: M, y: y - 1.5, w: 10, h: 10, lw: 0.6 });
+        items.push({ t: 'text', x: M + 17, y: y, s: label, size: 10.5 });
+        y -= 15;
+        if (note) {
+          var l = pdfWrap(note, R - M - 17, 8.5, false);
+          for (var i = 0; i < l.length; i++) {
+            items.push({ t: 'text', x: M + 17, y: y, s: l[i], size: 8.5 });
+            y -= 11;
+          }
+        }
+        y -= 6;
+      },
+      fin: function () { pages.push(items); return pages; }
+    };
+  }
+
+  /* ------------------------------------------------------------------ état */
+
+  var state = null;
+  var vue = 'bord';
+  var bailCourant = null;
+  var moisAffiche = currentMonth();
+
+  function etatVide() {
+    return {
+      version: 1,
+      bailleur: { nom: '', adresse: '', ville: '', email: '' },
+      biens: [], lots: [], locataires: [], baux: [], echeances: [], quittances: [],
+      numeros: {},
+      journal: []
+    };
+  }
+  function normalise(data) {
+    var base = etatVide();
+    if (!data || typeof data !== 'object') return base;
+    var keys = ['bailleur','biens','lots','locataires','baux','echeances','quittances','numeros','journal'];
+    for (var i = 0; i < keys.length; i++) {
+      if (data[keys[i]]) base[keys[i]] = data[keys[i]];
+    }
+    return base;
+  }
+  function journalise(type, detail) {
+    state.journal.push({ ts: new Date().toISOString(), type: type, detail: detail });
+    if (state.journal.length > 400) state.journal = state.journal.slice(-400);
+  }
+
+  /* -------------------------------------------------------------- stockage */
+
+  var store = {
+    mode: 'local',
+    docRef: null,
+    pending: null,
+    saving: false,
+    key: 'quittance-v1'
+  };
+
+  function libelleStockage() {
+    if (store.mode === 'cloud') return 'Données enregistrées dans votre espace privé';
+    return 'Données enregistrées dans ce navigateur';
+  }
+  function majStockage(extra) {
+    var el = document.getElementById('storage-state');
+    if (el) el.innerHTML = '<b>' + esc(libelleStockage()) + '</b>' + (extra ? ' · ' + esc(extra) : '');
+  }
+
+  function sauvegarde() {
+    if (store.mode === 'cloud' && store.docRef) {
+      store.pending = JSON.parse(JSON.stringify(state));
+      videPending();
+    } else {
+      try {
+        window.localStorage.setItem(store.key, JSON.stringify(state));
+      } catch (e) {
+        majStockage('sauvegarde impossible');
+      }
+    }
+  }
+  function videPending() {
+    if (store.saving || !store.pending) return;
+    var payload = store.pending;
+    store.pending = null;
+    store.saving = true;
+    store.docRef.set({ data: payload, majLe: new Date().toISOString() }).then(function () {
+      store.saving = false;
+      majStockage('à jour');
+      videPending();
+    }).catch(function (err) {
+      store.saving = false;
+      majStockage('sauvegarde refusée (' + (err && err.code ? err.code : 'erreur') + ')');
+    });
+  }
+
+  function chargeLocal() {
+    try {
+      var raw = window.localStorage.getItem(store.key);
+      return raw ? normalise(JSON.parse(raw)) : etatVide();
+    } catch (e) {
+      return etatVide();
+    }
+  }
+
+  function initStockage() {
+    state = chargeLocal();
+    rendu();
+    majStockage('');
+    if (!window.claude || typeof window.claude.use !== 'function') return;
+    Promise.all([window.claude.use('db'), window.claude.use('user')]).then(function (res) {
+      var db = res[0];
+      var user = res[1];
+      if (!db || !user) return;
+      return Promise.resolve(user.id()).then(function (id) {
+        if (!id) return;
+        store.docRef = db.doc('data/users/' + id + '/registre');
+        return store.docRef.get().then(function (snap) {
+          var distant = snap && snap.exists ? snap.data() : null;
+          var localVide = !state.biens.length && !state.baux.length && !state.locataires.length;
+          if (distant && distant.data) {
+            if (localVide) {
+              state = normalise(distant.data);
+            } else {
+              state = normalise(distant.data);
+              toast('Vos données enregistrées en ligne ont été reprises.');
+            }
+          }
+          store.mode = 'cloud';
+          majStockage('à jour');
+          rendu();
+          if (!distant) sauvegarde();
+        });
+      });
+    }).catch(function () { /* on reste en local */ });
+  }
+
+  /* ------------------------------------------------------- accès au modèle */
+
+  function bienDe(lotId) {
+    var lot = trouve(state.lots, lotId);
+    return lot ? trouve(state.biens, lot.bienId) : null;
+  }
+  function trouve(liste, id) {
+    for (var i = 0; i < liste.length; i++) { if (liste[i].id === id) return liste[i]; }
+    return null;
+  }
+  function nomLot(lotId) {
+    var lot = trouve(state.lots, lotId);
+    if (!lot) return 'Lot supprimé';
+    var bien = trouve(state.biens, lot.bienId);
+    return (bien ? bien.nom + ' · ' : '') + lot.nom;
+  }
+  function adresseLot(lotId) {
+    var lot = trouve(state.lots, lotId);
+    var bien = lot ? trouve(state.biens, lot.bienId) : null;
+    if (!bien) return '';
+    return bien.adresse + (lot && lot.nom ? ' (' + lot.nom + ')' : '');
+  }
+  function nomLocataire(id) {
+    var l = trouve(state.locataires, id);
+    return l ? l.nom : 'Locataire supprimé';
+  }
+  function idsLocataires(bail) {
+    var ids = [bail.locataireId];
+    (bail.colocataires || []).forEach(function (id) { if (ids.indexOf(id) === -1) ids.push(id); });
+    return ids;
+  }
+  function nomsLocataires(bail) {
+    return idsLocataires(bail).map(nomLocataire).join(', ');
+  }
+  function typeBailLibelle(bail) {
+    if (bail.type === 'meuble') return 'location meublée';
+    if (bail.type === 'colocation') return 'colocation à bail unique';
+    return 'location nue';
+  }
+  function detailsDe(bail) {
+    var d = bail.details || {};
+    var defauts = {
+      surface: '', nbPieces: '', periode: '', habitat: 'Immeuble collectif', copro: false,
+      chauffage: 'Individuel', eauChaude: 'Individuel', autresParties: '', equipements: '',
+      accessoires: '', communes: '', dpeClasse: '', dpeConso: '', idFiscal: '',
+      residencePrincipale: false, depot: 0, periodicite: 'Mensuelle', terme: 'À échoir', jour: '1',
+      duree: bail.type === 'meuble' ? '12' : '36', irl: '', encadrement: false,
+      loyerRefMajore: 0, complement: 0, dernierLoyer: 0, dernierLoyerDate: '',
+      travaux: '', mobilier: '', particulieres: '',
+      piecesEdl: 'Entrée\nSéjour\nCuisine\nChambre\nSalle de bains\nWC'
+    };
+    for (var k in defauts) {
+      if (d[k] === undefined) d[k] = defauts[k];
+    }
+    bail.details = d;
+    return d;
+  }
+  function bailActif(bail, mois) {
+    if (bail.debut.slice(0, 7) > mois) return false;
+    if (bail.fin && bail.fin.slice(0, 7) < mois) return false;
+    return true;
+  }
+  function totalPaye(ech) {
+    var t = 0;
+    for (var i = 0; i < (ech.paiements || []).length; i++) t += ech.paiements[i].montant;
+    return t;
+  }
+  function totalDu(ech) { return ech.loyer + ech.charges; }
+  function statut(ech) {
+    var paye = totalPaye(ech);
+    if (paye >= totalDu(ech) && totalDu(ech) > 0) return 'paye';
+    if (paye > 0) return 'partiel';
+    return 'impaye';
+  }
+  function echeanceDe(bailId, mois) {
+    for (var i = 0; i < state.echeances.length; i++) {
+      if (state.echeances[i].bailId === bailId && state.echeances[i].mois === mois) return state.echeances[i];
+    }
+    return null;
+  }
+  function echeancesDuMois(mois) {
+    return state.echeances.filter(function (e) { return e.mois === mois; });
+  }
+  function quittanceDe(echId) {
+    for (var i = 0; i < state.quittances.length; i++) {
+      if (state.quittances[i].echeanceId === echId && !state.quittances[i].annulee) return state.quittances[i];
+    }
+    return null;
+  }
+
+  /* --------------------------------------------- génération des échéances */
+
+  function genereEcheances() {
+    var cree = 0;
+    var limite = currentMonth();
+    for (var i = 0; i < state.baux.length; i++) {
+      var bail = state.baux[i];
+      var mois = bail.debut.slice(0, 7);
+      var borne = bail.fin ? (bail.fin.slice(0, 7) < limite ? bail.fin.slice(0, 7) : limite) : limite;
+      var garde = 0;
+      while (mois <= borne && garde < 600) {
+        garde++;
+        if (!echeanceDe(bail.id, mois)) {
+          state.echeances.push(construitEcheance(bail, mois));
+          cree++;
+        }
+        mois = addMonths(mois, 1);
+      }
+    }
+    return cree;
+  }
+  function construitEcheance(bail, mois) {
+    var jours = daysInMonth(mois);
+    var premier = 1;
+    var dernier = jours;
+    var prorata = false;
+    if (bail.debut.slice(0, 7) === mois) {
+      premier = parseInt(bail.debut.slice(8, 10), 10);
+      if (premier > 1) prorata = true;
+    }
+    if (bail.fin && bail.fin.slice(0, 7) === mois) {
+      dernier = parseInt(bail.fin.slice(8, 10), 10);
+      if (dernier < jours) prorata = true;
+    }
+    var couverts = Math.max(0, dernier - premier + 1);
+    var ratio = couverts / jours;
+    return {
+      id: uid('ech'),
+      bailId: bail.id,
+      mois: mois,
+      debut: mois + '-' + String(premier).padStart(2, '0'),
+      fin: mois + '-' + String(dernier).padStart(2, '0'),
+      loyer: prorata ? Math.round(bail.loyer * ratio) : bail.loyer,
+      charges: prorata ? Math.round(bail.charges * ratio) : bail.charges,
+      prorata: prorata,
+      paiements: []
+    };
+  }
+
+  /* ------------------------------------------------------------ quittances */
+
+  function numeroSuivant(annee) {
+    var n = (state.numeros[annee] || 0) + 1;
+    state.numeros[annee] = n;
+    return annee + '-' + String(n).padStart(4, '0');
+  }
+
+  function emetDocument(ech) {
+    var bail = trouve(state.baux, ech.bailId);
+    if (!bail) return null;
+    var paye = totalPaye(ech);
+    var du = totalDu(ech);
+    var complet = paye >= du;
+    var dernierPaiement = (ech.paiements || []).slice().sort(function (a, b) {
+      return a.date < b.date ? -1 : 1;
+    }).pop();
+    var annee = ech.mois.slice(0, 4);
+    var doc = {
+      id: uid('qui'),
+      echeanceId: ech.id,
+      type: complet ? 'quittance' : 'recu',
+      numero: numeroSuivant(annee),
+      emisLe: todayISO(),
+      mois: ech.mois,
+      periodeDebut: ech.debut,
+      periodeFin: ech.fin,
+      locataire: nomsLocataires(bail),
+      locataireId: bail.locataireId,
+      adresse: adresseLot(bail.lotId),
+      loyer: ech.loyer,
+      charges: ech.charges,
+      paye: paye,
+      restant: Math.max(0, du - paye),
+      payeLe: dernierPaiement ? dernierPaiement.date : todayISO(),
+      bailleur: JSON.parse(JSON.stringify(state.bailleur)),
+      annulee: false
+    };
+    state.quittances.push(doc);
+    journalise(complet ? 'quittance' : 'recu', doc.numero + ' · ' + nomLot(bail.lotId) + ' · ' + ech.mois);
+    return doc;
+  }
+
+  function pdfDocument(doc) {
+    var M = 56;
+    var R = 539;
+    var items = [];
+    var y = 790;
+    var b = doc.bailleur || {};
+    items.push({ t: 'text', x: M, y: y, s: b.nom || 'Bailleur', size: 11, bold: true });
+    y -= 14;
+    if (b.adresse) {
+      var ad = pdfWrap(b.adresse, 230, 9, false);
+      for (var i = 0; i < ad.length; i++) { items.push({ t: 'text', x: M, y: y, s: ad[i], size: 9 }); y -= 12; }
+    }
+    if (b.email) { items.push({ t: 'text', x: M, y: y, s: b.email, size: 9 }); }
+
+    items.push({ t: 'text', x: R, y: 790, s: doc.locataire, size: 11, bold: true, align: 'right' });
+    var adrLoc = pdfWrap(doc.adresse, 230, 9, false);
+    var yy = 776;
+    for (var j = 0; j < adrLoc.length; j++) { items.push({ t: 'text', x: R, y: yy, s: adrLoc[j], size: 9, align: 'right' }); yy -= 12; }
+
+    var titre = doc.type === 'quittance' ? 'QUITTANCE DE LOYER' : 'RECU DE PAIEMENT PARTIEL';
+    items.push({ t: 'text', x: M, y: 690, s: titre, size: 17, bold: true });
+    items.push({ t: 'text', x: R, y: 690, s: 'n° ' + doc.numero, size: 10, align: 'right' });
+    items.push({ t: 'line', x1: M, y1: 680, x2: R, y2: 680, lw: 1.2 });
+
+    items.push({ t: 'text', x: M, y: 650, s: 'Période du ' + frDateLong(doc.periodeDebut) + ' au ' + frDateLong(doc.periodeFin), size: 11 });
+    items.push({ t: 'text', x: M, y: 632, s: 'Logement : ' + doc.adresse, size: 10 });
+
+    var yT = 590;
+    items.push({ t: 'text', x: M, y: yT, s: 'Loyer hors charges', size: 10.5 });
+    items.push({ t: 'text', x: R, y: yT, s: euros(doc.loyer), size: 10.5, align: 'right' });
+    items.push({ t: 'text', x: M, y: yT - 20, s: 'Provision pour charges', size: 10.5 });
+    items.push({ t: 'text', x: R, y: yT - 20, s: euros(doc.charges), size: 10.5, align: 'right' });
+    items.push({ t: 'line', x1: M, y1: yT - 30, x2: R, y2: yT - 30, lw: 0.6 });
+    items.push({ t: 'text', x: M, y: yT - 48, s: 'Total dû pour la période', size: 11, bold: true });
+    items.push({ t: 'text', x: R, y: yT - 48, s: euros(doc.loyer + doc.charges), size: 11, bold: true, align: 'right' });
+    items.push({ t: 'text', x: M, y: yT - 70, s: 'Montant réglé', size: 10.5 });
+    items.push({ t: 'text', x: R, y: yT - 70, s: euros(doc.paye), size: 10.5, align: 'right' });
+    if (doc.restant > 0) {
+      items.push({ t: 'text', x: M, y: yT - 90, s: 'Solde restant dû', size: 10.5, bold: true });
+      items.push({ t: 'text', x: R, y: yT - 90, s: euros(doc.restant), size: 10.5, bold: true, align: 'right' });
+    }
+
+    var corps;
+    if (doc.type === 'quittance') {
+      corps = 'Je soussigné(e) ' + (b.nom || '') + ', bailleur du logement désigné ci-dessus, déclare avoir reçu de '
+        + doc.locataire + ' la somme de ' + euros(doc.paye) + ', au titre du loyer et des charges de la période indiquée, '
+        + 'et lui en donne quittance, sous réserve de tous mes droits.';
+    } else {
+      corps = 'Je soussigné(e) ' + (b.nom || '') + ' déclare avoir reçu de ' + doc.locataire + ' la somme de '
+        + euros(doc.paye) + ' à valoir sur le loyer et les charges de la période indiquée. Ce document ne vaut pas quittance : '
+        + 'il reste dû ' + euros(doc.restant) + '.';
+    }
+    var lignes = pdfWrap(corps, R - M, 10.5, false);
+    var yC = 460;
+    for (var k = 0; k < lignes.length; k++) { items.push({ t: 'text', x: M, y: yC, s: lignes[k], size: 10.5 }); yC -= 15; }
+
+    items.push({ t: 'text', x: M, y: yC - 14, s: 'Paiement reçu le ' + frDateLong(doc.payeLe) + '.', size: 10.5 });
+
+    if (doc.type === 'quittance') {
+      var mention = pdfWrap('Cette quittance annule tous les reçus qui auraient pu être établis pour paiement antérieur. Elle est délivrée gratuitement, conformément à la loi du 6 juillet 1989.', R - M, 9, false);
+      var yM = yC - 50;
+      for (var l = 0; l < mention.length; l++) { items.push({ t: 'text', x: M, y: yM, s: mention[l], size: 9 }); yM -= 11; }
+    }
+
+    items.push({ t: 'text', x: R, y: 220, s: 'Fait à ' + (b.ville || '') + ', le ' + frDateLong(doc.emisLe), size: 10.5, align: 'right' });
+    items.push({ t: 'text', x: R, y: 198, s: 'Le bailleur, ' + (b.nom || ''), size: 10.5, align: 'right' });
+    items.push({ t: 'line', x1: 360, y1: 130, x2: R, y2: 130, lw: 0.5 });
+    items.push({ t: 'text', x: R, y: 116, s: 'Signature', size: 8.5, align: 'right' });
+    return buildPdf([items]);
+  }
+
+  function nomFichier(doc) {
+    var base = (doc.type === 'quittance' ? 'quittance' : 'recu') + '-' + doc.mois + '-' + doc.locataire;
+    return base.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') + '.pdf';
+  }
+
+  function livrePdf(nom, bytes) {
+    var blob = new Blob([bytes], { type: 'application/pdf' });
+    if (window.claude && typeof window.claude.use === 'function') {
+      window.claude.use('downloads').then(function (dl) {
+        if (!dl) return fallbackTelecharge(blob, nom);
+        dl.save({ filename: nom, data: blob }).then(function () {
+          toast('PDF enregistré.');
+        }).catch(function (err) {
+          if (err && err.code === 'declined') return;
+          fallbackTelecharge(blob, nom);
+        });
+      }).catch(function () { fallbackTelecharge(blob, nom); });
+    } else {
+      fallbackTelecharge(blob, nom);
+    }
+  }
+  function telecharge(doc) {
+    livrePdf(nomFichier(doc), pdfDocument(doc));
+  }
+  function fallbackTelecharge(blob, nom) {
+    try {
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url;
+      a.download = nom;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(function () { URL.revokeObjectURL(url); }, 4000);
+    } catch (e) {
+      toast('Téléchargement impossible dans cette fenêtre.');
+    }
+  }
+
+  function prepareEmail(doc) {
+    var loc = trouve(state.locataires, doc.locataireId);
+    var dest = loc && loc.email ? loc.email : '';
+    var sujet = (doc.type === 'quittance' ? 'Quittance de loyer' : 'Reçu de paiement') + ' - ' + monthLabel(doc.mois);
+    var corps = 'Bonjour,\n\nVous trouverez ci-joint '
+      + (doc.type === 'quittance' ? 'votre quittance de loyer' : 'votre reçu de paiement')
+      + ' pour la période du ' + frDate(doc.periodeDebut) + ' au ' + frDate(doc.periodeFin)
+      + ', d\'un montant de ' + euros(doc.paye) + '.\n\nBien cordialement,\n' + (state.bailleur.nom || '');
+    var url = 'mailto:' + encodeURIComponent(dest) + '?subject=' + encodeURIComponent(sujet) + '&body=' + encodeURIComponent(corps);
+    window.open(url, '_blank');
+  }
+
+  /* ------------------------------------------- bail, annexes, état des lieux */
+
+  function listeAnnexes(bail, d) {
+    var a = [];
+    a.push({ l: "Notice d'information des droits et obligations des parties", n: "Notice type prévue par l'arrêté du 29 mai 2015. Obligatoire, annexée au contrat." });
+    a.push({ l: "État des lieux d'entrée", n: "Établi contradictoirement, signé par les deux parties, joint au contrat." });
+    a.push({ l: "Diagnostic de performance énergétique", n: "Moins de dix ans. Il conditionne aussi le droit de louer et le gel éventuel du loyer." });
+    a.push({ l: "État des risques et pollutions", n: "Daté de moins de six mois à la date de signature." });
+    a.push({ l: "Diagnostic de l'installation intérieure d'électricité", n: "Si l'installation a plus de quinze ans." });
+    a.push({ l: "Diagnostic de l'installation intérieure de gaz", n: "Si l'installation a plus de quinze ans." });
+    if (d.periode && /avant|1949/i.test(d.periode)) {
+      a.push({ l: "Constat de risque d'exposition au plomb", n: "Logement construit avant 1949." });
+    }
+    if (d.copro) {
+      a.push({ l: "Extraits du règlement de copropriété", n: "Destination de l'immeuble, jouissance et usage des parties privatives et communes, quote-part du lot." });
+    }
+    if (bail.type === 'meuble') {
+      a.push({ l: "Inventaire et état détaillé du mobilier", n: "Obligatoire en location meublée : le logement doit comporter les meubles listés par le décret du 31 juillet 2015." });
+    }
+    a.push({ l: "Attestation d'assurance habitation du locataire", n: "Remise à la remise des clés, puis chaque année." });
+    a.push({ l: "Grille de vétusté", n: "Facultative, mais elle évite les litiges sur le dépôt de garantie." });
+    a.push({ l: "Autorisation préalable de mise en location", n: "Uniquement dans les communes ayant instauré le permis de louer." });
+    return a;
+  }
+
+  function pagesBail(bail) {
+    var d = detailsDe(bail);
+    var b = state.bailleur;
+    var meuble = bail.type === 'meuble';
+    var coloc = bail.type === 'colocation';
+    var f = Flux();
+
+    f.titre(coloc ? 'Contrat de colocation à bail unique' : (meuble ? 'Contrat de location meublée' : 'Contrat de location de logement nu'));
+    f.texte('Logement loué à usage de résidence principale. Contrat soumis au ' + (meuble ? 'titre Ier bis' : 'titre Ier')
+      + " de la loi n° 89-462 du 6 juillet 1989, établi d'après le contrat type du décret n° 2015-587 du 29 mai 2015, "
+      + "modifié par le décret n° 2026-596 du 6 juillet 2026 applicable aux contrats conclus ou renouvelés à compter du 1er octobre 2026.",
+      { size: 8.5, apres: 2 });
+    f.trait();
+
+    f.section('I. Désignation des parties');
+    f.champ('Bailleur', b.nom);
+    f.champ('Domicile du bailleur', b.adresse);
+    if (b.email) f.champ('Courriel du bailleur', b.email);
+    f.champ('Téléphone du bailleur (facultatif)', b.telephone || '');
+    idsLocataires(bail).forEach(function (id, i) {
+      var l = trouve(state.locataires, id);
+      f.champ(coloc ? 'Colocataire ' + (i + 1) : 'Locataire', l ? l.nom : '');
+      f.champ('   Courriel', l && l.email ? l.email : '');
+      f.champ('   Téléphone (facultatif)', l && l.tel ? l.tel : '');
+    });
+
+    f.section('II. Objet du contrat');
+    f.texte('A. Consistance du logement', { size: 10, bold: true });
+    f.champ('Localisation', adresseLot(bail.lotId));
+    f.champ("Type d'habitat", d.habitat);
+    f.champ('Régime juridique de l\'immeuble', d.copro ? 'Copropriété' : 'Monopropriété');
+    f.champ('Période de construction', d.periode);
+    f.champ('Surface habitable', d.surface ? d.surface + ' m2' : '');
+    f.champ('Nombre de pièces principales', d.nbPieces);
+    f.champ('Autres parties du logement', d.autresParties);
+    f.champ("Éléments d'équipement", d.equipements);
+    f.champ('Chauffage', d.chauffage);
+    f.champ('Eau chaude sanitaire', d.eauChaude);
+    f.champ('Identifiant fiscal du logement', d.idFiscal);
+    f.texte('B. Destination des locaux', { size: 10, bold: true });
+    f.texte("Le logement est loué à usage exclusif d'habitation, à titre de résidence principale du locataire.", { size: 10 });
+    if (d.residencePrincipale) {
+      f.texte("Le logement est soumis à une obligation d'occupation à titre de résidence principale.", { size: 10 });
+    }
+    f.texte('C. Locaux et équipements accessoires', { size: 10, bold: true });
+    f.champ('Accessoires à usage privatif', d.accessoires);
+    f.champ('Parties et équipements communs', d.communes);
+    f.texte("D. Performance énergétique", { size: 10, bold: true });
+    f.champ('Classe du DPE', d.dpeClasse);
+    f.champ('Consommation (kWh/m2/an)', d.dpeConso);
+
+    f.section("III. Date de prise d'effet et durée du contrat");
+    f.champ("Date de prise d'effet", frDateLong(bail.debut));
+    f.champ('Durée du contrat', (d.duree || '') + ' mois');
+    f.texte(meuble
+      ? "Le contrat est conclu pour un an, reconductible tacitement. Le locataire peut donner congé à tout moment avec un préavis d'un mois ; le bailleur doit motiver son congé et respecter un préavis de trois mois."
+      : "Le contrat est conclu pour trois ans lorsque le bailleur est une personne physique, six ans lorsqu'il est une personne morale, et se reconduit tacitement. Le locataire peut donner congé à tout moment, avec un préavis de trois mois, réduit à un mois dans les cas prévus par la loi. Le congé du bailleur doit être motivé et notifié six mois avant le terme.",
+      { size: 9.5 });
+
+    f.section('IV. Conditions financières');
+    f.texte('A. Loyer', { size: 10, bold: true });
+    f.champ('Loyer mensuel hors charges', euros(bail.loyer));
+    if (d.encadrement) {
+      f.texte("Le logement est situé en zone d'encadrement des loyers.", { size: 9.5 });
+      f.champ('Loyer de référence majoré', euros(d.loyerRefMajore));
+      f.champ('Complément de loyer', euros(d.complement));
+      f.champ('Dernier loyer appliqué au précédent locataire', d.dernierLoyer ? euros(d.dernierLoyer) : 'Néant');
+      f.champ('Date de son dernier versement', d.dernierLoyerDate ? frDateLong(d.dernierLoyerDate) : '');
+    }
+    f.texte('B. Révision du loyer', { size: 10, bold: true });
+    f.texte("Le loyer est révisé chaque année à la date anniversaire du contrat, en fonction de l'indice de référence des loyers publié par l'INSEE.", { size: 9.5 });
+    f.champ('Trimestre de référence de l\'IRL', d.irl);
+    f.texte('C. Charges', { size: 10, bold: true });
+    f.champ('Provision mensuelle pour charges', euros(bail.charges));
+    f.texte("Les charges donnent lieu à une régularisation annuelle, au vu des dépenses réelles. Le décompte est communiqué au locataire un mois avant la régularisation, avec le mode de répartition.", { size: 9.5 });
+    f.texte('D. Modalités de paiement', { size: 10, bold: true });
+    f.champ('Périodicité', d.periodicite);
+    f.champ('Paiement', d.terme);
+    f.champ('Date de paiement', 'Le ' + d.jour + ' de chaque mois');
+    f.champ('Montant total dû à chaque échéance', euros(bail.loyer + bail.charges));
+
+    f.section('V. Travaux');
+    f.champ("Travaux réalisés depuis la fin du dernier contrat", d.travaux || 'Néant');
+
+    f.section('VI. Garanties');
+    f.champ('Dépôt de garantie', d.depot ? euros(d.depot) : 'Néant');
+    f.texte(meuble
+      ? "Le dépôt de garantie ne peut excéder deux mois de loyer hors charges. Il est restitué dans un délai maximal d'un mois si l'état des lieux de sortie est conforme à celui d'entrée, de deux mois dans le cas contraire."
+      : "Le dépôt de garantie ne peut excéder un mois de loyer hors charges. Il est restitué dans un délai maximal d'un mois si l'état des lieux de sortie est conforme à celui d'entrée, de deux mois dans le cas contraire.",
+      { size: 9.5 });
+
+    if (coloc) {
+      f.section('VII. Clause de solidarité');
+      f.texte("Les colocataires sont tenus solidairement et indivisiblement du paiement du loyer, des charges et de toute somme due au titre du présent contrat. La solidarité du colocataire qui donne congé prend fin dans les conditions prévues à l'article 8-1 de la loi du 6 juillet 1989, au plus tard six mois après la fin de son préavis, sauf remplacement par un nouveau colocataire.", { size: 9.5 });
+    }
+
+    f.section((coloc ? 'VIII' : 'VII') + '. Clause résolutoire');
+    f.texte("Le contrat est résilié de plein droit : à défaut de paiement du loyer ou des charges aux termes convenus ; à défaut de versement du dépôt de garantie ; à défaut d'assurance contre les risques locatifs ; en cas de troubles de voisinage constatés par une décision de justice passée en force de chose jugée.", { size: 9.5 });
+    f.texte("La résiliation ne produit effet qu'à l'expiration d'un délai de six semaines après un commandement de payer demeuré infructueux, ou d'un mois après un commandement de justifier de l'assurance demeuré sans effet.", { size: 9.5 });
+
+    f.section((coloc ? 'IX' : 'VIII') + '. Honoraires de location');
+    f.texte("Le contrat est conclu directement entre les parties, sans intermédiaire : aucun honoraire n'est dû.", { size: 9.5 });
+
+    f.section((coloc ? 'X' : 'IX') + '. Autres conditions particulières');
+    f.texte(d.particulieres || 'Néant.', { size: 9.5 });
+
+    f.section((coloc ? 'XI' : 'X') + '. Annexes');
+    listeAnnexes(bail, d).forEach(function (a) { f.texte('- ' + a.l, { size: 9.5, interligne: 2 }); });
+
+    f.espace(10);
+    f.texte('Fait à ' + (b.ville || '') + ', le ' + frDateLong(todayISO()) + ", en autant d'exemplaires originaux que de parties.", { size: 10 });
+    var colonnes = ['Le bailleur'];
+    idsLocataires(bail).forEach(function (id, i) {
+      colonnes.push(coloc ? 'Colocataire ' + (i + 1) : 'Le locataire');
+    });
+    f.signatures(colonnes.slice(0, 3));
+    return f.fin();
+  }
+
+  function pagesAnnexes(bail) {
+    var d = detailsDe(bail);
+    var f = Flux();
+    f.titre('Annexes à joindre au contrat');
+    f.texte(nomLot(bail.lotId) + ' · ' + nomsLocataires(bail) + ' · ' + typeBailLibelle(bail), { size: 10, apres: 4 });
+    f.trait();
+    f.texte("Le bail ne se signe pas seul. Cochez chaque pièce au fur et à mesure : les annexes manquantes sont la première cause de contestation d'un contrat.", { size: 9.5, apres: 8 });
+    listeAnnexes(bail, d).forEach(function (a) { f.coche(a.l, a.n); });
+    f.trait();
+    f.texte("Cette liste est un aide-mémoire, adapté au type de bail et aux informations saisies. Faites-la vérifier une fois par un professionnel du droit avant de l'utiliser en série.", { size: 8.5 });
+    return f.fin();
+  }
+
+  function pagesEtatDesLieux(bail, sens) {
+    var d = detailsDe(bail);
+    var entree = sens === 'entree';
+    var f = Flux();
+    var xs = [243, 293, 343, 393];
+    var obsX = 443;
+
+    f.titre("État des lieux " + (entree ? "d'entrée" : 'de sortie'));
+    f.texte("Établi contradictoirement entre les parties, en autant d'exemplaires que de signataires. Loi du 6 juillet 1989, article 3-2.", { size: 8.5, apres: 2 });
+    f.trait();
+    f.champ('Logement', adresseLot(bail.lotId));
+    f.champ('Bailleur', state.bailleur.nom);
+    f.champ(bail.type === 'colocation' ? 'Colocataires' : 'Locataire', nomsLocataires(bail));
+    f.aRemplir("Date de l'état des lieux :", 160);
+    f.aRemplir('Personnes présentes :', 300);
+
+    f.section('Compteurs et clés');
+    f.aRemplir('Eau froide (index) :', 200);
+    f.aRemplir('Eau chaude (index) :', 200);
+    f.aRemplir('Électricité (index) :', 200);
+    f.aRemplir('Gaz (index) :', 200);
+    f.aRemplir('Nombre de clés remises :', 200);
+    f.aRemplir('Badges, télécommandes, boîte aux lettres :', 200);
+
+    var pieces = String(d.piecesEdl || '').split('\n').map(function (x) { return x.trim(); }).filter(Boolean);
+    if (!pieces.length) pieces = ['Pièce 1', 'Pièce 2'];
+    var lignes = ['Sols', 'Murs', 'Plafond', 'Fenêtres et volets', 'Portes', 'Électricité et éclairage', 'Chauffage', 'Équipements'];
+    pieces.forEach(function (piece) {
+      f.section(piece);
+      f.enTeteGrille(['Neuf', 'Bon', 'Usagé', 'Mauvais'], xs, obsX);
+      lignes.forEach(function (l) { f.grille(l, xs, obsX); });
+    });
+
+    if (bail.type === 'meuble') {
+      f.section('Mobilier');
+      var mob = String(d.mobilier || '').split('\n').map(function (x) { return x.trim(); }).filter(Boolean);
+      if (!mob.length) mob = ['Literie', 'Table et sièges', 'Rangements', 'Plaques de cuisson', 'Four ou micro-ondes', 'Réfrigérateur', 'Vaisselle et ustensiles', 'Luminaires', 'Matériel d\'entretien'];
+      f.enTeteGrille(['Neuf', 'Bon', 'Usagé', 'Mauvais'], xs, obsX);
+      mob.forEach(function (m) { f.grille(m, xs, obsX); });
+    }
+
+    f.section('Observations générales');
+    f.aRemplir('', 470);
+    f.aRemplir('', 470);
+    f.aRemplir('', 470);
+    if (!entree) {
+      f.texte("Comparaison avec l'état des lieux d'entrée : les dégradations imputables au locataire sont détaillées ci-dessus, vétusté déduite.", { size: 9 });
+    }
+    f.signatures(['Le bailleur', bail.type === 'colocation' ? 'Les colocataires' : 'Le locataire']);
+    return f.fin();
+  }
+
+  function nomDocument(bail, suffixe) {
+    var base = suffixe + '-' + nomLot(bail.lotId);
+    return base.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') + '.pdf';
+  }
+
+  /* ------------------------------------------------------------ rendu : UI */
+
+  var ONGLETS = [
+    { id: 'bord', nom: 'Tableau de bord' },
+    { id: 'loyers', nom: 'Loyers' },
+    { id: 'quittances', nom: 'Quittances' },
+    { id: 'parc', nom: 'Parc' },
+    { id: 'locataires', nom: 'Locataires' },
+    { id: 'baux', nom: 'Baux' },
+    { id: 'reglages', nom: 'Réglages' }
+  ];
+
+  function toast(msg) {
+    var el = document.getElementById('toast');
+    el.textContent = msg;
+    el.hidden = false;
+    clearTimeout(toast._t);
+    toast._t = setTimeout(function () { el.hidden = true; }, 3200);
+  }
+
+  function rendu() {
+    var tabs = document.getElementById('tabs');
+    tabs.innerHTML = ONGLETS.map(function (o) {
+      return '<button type="button" data-vue="' + o.id + '"' + (o.id === vue ? ' aria-current="page"' : '') + '>' + esc(o.nom) + '</button>';
+    }).join('');
+    var host = document.getElementById('view');
+    if (vue === 'bord') host.innerHTML = vueBord();
+    else if (vue === 'loyers') host.innerHTML = vueLoyers();
+    else if (vue === 'quittances') host.innerHTML = vueQuittances();
+    else if (vue === 'parc') host.innerHTML = vueParc();
+    else if (vue === 'locataires') host.innerHTML = vueLocataires();
+    else if (vue === 'baux') host.innerHTML = vueBaux();
+    else if (vue === 'documents') host.innerHTML = vueDocuments();
+    else host.innerHTML = vueReglages();
+  }
+
+  function vueBord() {
+    var mois = currentMonth();
+    var ech = echeancesDuMois(mois);
+    var du = 0, paye = 0;
+    ech.forEach(function (e) { du += totalDu(e); paye += totalPaye(e); });
+    var retards = state.echeances.filter(function (e) {
+      return e.mois < mois && statut(e) !== 'paye';
+    });
+    var retardMontant = 0;
+    retards.forEach(function (e) { retardMontant += totalDu(e) - totalPaye(e); });
+
+    var h = '<h2 class="view-title">' + esc(monthLabel(mois)) + '</h2>';
+    h += '<p class="view-intro">Ce qui doit rentrer ce mois-ci, ce qui est arrivé, et ce qui traîne.</p>';
+
+    if (!state.baux.length) {
+      h += '<section class="panel"><h3>Commencer</h3>';
+      h += '<p class="empty">Trois étapes : créez un bien et son lot, ajoutez un locataire, puis un bail. Les échéances de loyer se créent ensuite toutes seules, mois après mois.</p>';
+      h += '<div class="row-actions"><button class="btn" type="button" data-action="go" data-vue="parc">Créer mon premier bien</button>';
+      h += '<button class="btn ghost" type="button" data-action="demo">Charger un jeu de démonstration</button></div></section>';
+      return h;
+    }
+
+    h += '<section class="panel"><div class="stats">';
+    h += '<div class="stat"><div class="k">Attendu ce mois</div><div class="v">' + esc(euros(du)) + '</div></div>';
+    h += '<div class="stat is-accent"><div class="k">Encaissé</div><div class="v">' + esc(euros(paye)) + '</div></div>';
+    h += '<div class="stat"><div class="k">Reste à percevoir</div><div class="v">' + esc(euros(Math.max(0, du - paye))) + '</div></div>';
+    h += '<div class="stat ' + (retardMontant > 0 ? 'is-warn' : '') + '"><div class="k">Retards antérieurs</div><div class="v">' + esc(euros(retardMontant)) + '</div></div>';
+    h += '</div></section>';
+
+    h += '<section class="panel"><h3>Loyers du mois</h3>' + tableauEcheances(ech, mois) + '</section>';
+
+    if (retards.length) {
+      h += '<section class="panel"><h3>Impayés des mois précédents</h3>';
+      h += tableauEcheances(retards.sort(function (a, b) { return a.mois < b.mois ? -1 : 1; }), null) + '</section>';
+    }
+    return h;
+  }
+
+  function tableauEcheances(liste, mois) {
+    if (!liste.length) {
+      return '<p class="empty">Aucune échéance' + (mois ? ' pour ce mois' : '') + '. Les échéances se créent à partir des baux.</p>';
+    }
+    var h = '<div class="scroll-x"><table class="ledger"><thead><tr>';
+    h += '<th>Logement</th><th>Locataire</th>' + (mois ? '' : '<th>Mois</th>');
+    h += '<th class="num">Dû</th><th class="num">Réglé</th><th>Statut</th><th></th></tr></thead><tbody>';
+    liste.forEach(function (e) {
+      var bail = trouve(state.baux, e.bailId);
+      if (!bail) return;
+      var st = statut(e);
+      var q = quittanceDe(e.id);
+      h += '<tr>';
+      h += '<td>' + esc(nomLot(bail.lotId)) + (e.prorata ? '<br><span class="meta" style="font-size:12.5px;color:var(--ink-soft)">prorata ' + esc(frDate(e.debut)) + ' au ' + esc(frDate(e.fin)) + '</span>' : '') + '</td>';
+      h += '<td>' + esc(nomLocataire(bail.locataireId)) + '</td>';
+      if (!mois) h += '<td>' + esc(monthLabel(e.mois)) + '</td>';
+      h += '<td class="num">' + esc(euros(totalDu(e))) + '</td>';
+      h += '<td class="num">' + esc(euros(totalPaye(e))) + '</td>';
+      h += '<td><span class="tag ' + (st === 'paye' ? 'ok' : (st === 'partiel' ? 'part' : 'late')) + '">'
+        + (st === 'paye' ? 'Payé' : (st === 'partiel' ? 'Partiel' : 'En attente')) + '</span></td>';
+      h += '<td class="num"><div class="row-actions" style="justify-content:flex-end">';
+      h += '<button class="btn ghost" type="button" data-action="paiement" data-id="' + e.id + '">Pointer</button>';
+      if (q) {
+        h += '<button class="btn ghost" type="button" data-action="pdf" data-id="' + q.id + '">PDF ' + (q.type === 'quittance' ? 'quittance' : 'reçu') + '</button>';
+      } else {
+        h += '<button class="btn" type="button" data-action="emettre" data-id="' + e.id + '"' + (totalPaye(e) <= 0 ? ' disabled' : '') + '>'
+          + (st === 'paye' ? 'Quittance' : 'Reçu') + '</button>';
+      }
+      h += '</div></td></tr>';
+    });
+    h += '</tbody></table></div>';
+    return h;
+  }
+
+  function vueLoyers() {
+    var h = '<h2 class="view-title">Loyers</h2>';
+    h += '<p class="view-intro">Chaque mois, l\'application crée les échéances à partir des baux en cours. Vous pointez ce qui est arrivé sur le compte, puis vous éditez la quittance.</p>';
+    h += '<div class="month-nav">';
+    h += '<button class="btn ghost" type="button" data-action="mois" data-delta="-1" aria-label="Mois précédent">Précédent</button>';
+    h += '<span class="label">' + esc(monthLabel(moisAffiche)) + '</span>';
+    h += '<button class="btn ghost" type="button" data-action="mois" data-delta="1" aria-label="Mois suivant">Suivant</button>';
+    h += '<button class="btn quiet" type="button" data-action="mois-courant">Mois en cours</button>';
+    h += '</div>';
+    h += '<section class="panel">' + tableauEcheances(echeancesDuMois(moisAffiche), moisAffiche) + '</section>';
+    return h;
+  }
+
+  function vueQuittances() {
+    var h = '<h2 class="view-title">Quittances et reçus</h2>';
+    h += '<p class="view-intro">Chaque document porte un numéro continu et ne change plus une fois émis. Pour corriger, annulez et rééditez : l\'annulation reste visible.</p>';
+    if (!state.quittances.length) {
+      return h + '<section class="panel"><p class="empty">Rien d\'émis pour l\'instant. Pointez un loyer, puis éditez la quittance depuis le tableau de bord.</p></section>';
+    }
+    var liste = state.quittances.slice().sort(function (a, b) { return a.numero < b.numero ? 1 : -1; });
+    h += '<section class="panel"><div class="scroll-x"><table class="ledger"><thead><tr>';
+    h += '<th>Numéro</th><th>Type</th><th>Mois</th><th>Locataire</th><th class="num">Montant</th><th></th></tr></thead><tbody>';
+    liste.forEach(function (q) {
+      h += '<tr' + (q.annulee ? ' style="opacity:.55"' : '') + '>';
+      h += '<td>' + esc(q.numero) + '<br><span style="font-size:12.5px;color:var(--ink-soft)">émis le ' + esc(frDate(q.emisLe)) + '</span></td>';
+      h += '<td>' + (q.annulee ? 'Annulé' : (q.type === 'quittance' ? 'Quittance' : 'Reçu partiel')) + '</td>';
+      h += '<td>' + esc(monthLabel(q.mois)) + '</td>';
+      h += '<td>' + esc(q.locataire) + '</td>';
+      h += '<td class="num">' + esc(euros(q.paye)) + '</td>';
+      h += '<td class="num"><div class="row-actions" style="justify-content:flex-end">';
+      h += '<button class="btn ghost" type="button" data-action="pdf" data-id="' + q.id + '">PDF</button>';
+      h += '<button class="btn ghost" type="button" data-action="email" data-id="' + q.id + '">E-mail</button>';
+      if (!q.annulee) h += '<button class="btn quiet" type="button" data-action="annuler-quittance" data-id="' + q.id + '">Annuler</button>';
+      h += '</div></td></tr>';
+    });
+    h += '</tbody></table></div></section>';
+    return h;
+  }
+
+  function vueParc() {
+    var h = '<h2 class="view-title">Parc</h2>';
+    h += '<p class="view-intro">Un bien, c\'est une adresse. Un lot, c\'est ce qui se loue : un appartement, un studio, un garage.</p>';
+    h += '<section class="panel"><h3>Ajouter un bien</h3><div class="grid-form">';
+    h += champ('bien-nom', 'Nom du bien', 'text', '', 'Immeuble Jean Bart');
+    h += champ('bien-adresse', 'Adresse complète', 'text', '', '12 rue Jean Bart, 59300 Valenciennes');
+    h += '</div><div class="row-actions"><button class="btn" type="button" data-action="add-bien">Ajouter le bien</button></div></section>';
+
+    if (!state.biens.length) {
+      return h + '<section class="panel"><p class="empty">Aucun bien pour l\'instant.</p></section>';
+    }
+    state.biens.forEach(function (b) {
+      var lots = state.lots.filter(function (l) { return l.bienId === b.id; });
+      h += '<section class="panel"><h3>' + esc(b.nom) + '</h3>';
+      h += '<p class="empty" style="margin-top:-8px">' + esc(b.adresse) + '</p>';
+      lots.forEach(function (l) {
+        var bailEnCours = state.baux.filter(function (x) { return x.lotId === l.id && bailActif(x, currentMonth()); })[0];
+        h += '<div class="list-line"><span class="name">' + esc(l.nom) + '</span>';
+        h += '<span class="meta">' + (l.surface ? esc(l.surface) + ' m²' : 'surface non renseignée') + '</span>';
+        h += '<span class="meta">' + (bailEnCours ? 'loué à ' + esc(nomLocataire(bailEnCours.locataireId)) : 'vacant') + '</span>';
+        h += '<span class="push"><button class="btn quiet" type="button" data-action="del-lot" data-id="' + l.id + '">Supprimer</button></span></div>';
+      });
+      if (!lots.length) h += '<p class="empty">Aucun lot dans ce bien.</p>';
+      h += '<div class="grid-form" style="margin-top:14px">';
+      h += champ('lot-nom-' + b.id, 'Nom du lot', 'text', '', 'Appartement 1');
+      h += champ('lot-surface-' + b.id, 'Surface (m²)', 'number', '', '37');
+      h += '</div><div class="row-actions"><button class="btn ghost" type="button" data-action="add-lot" data-id="' + b.id + '">Ajouter un lot</button>';
+      h += '<button class="btn quiet" type="button" data-action="del-bien" data-id="' + b.id + '">Supprimer le bien</button></div></section>';
+    });
+    return h;
+  }
+
+  function vueLocataires() {
+    var h = '<h2 class="view-title">Locataires</h2>';
+    h += '<p class="view-intro">Le strict nécessaire : de quoi éditer une quittance et l\'envoyer. Rien d\'autre n\'a à être conservé ici.</p>';
+    h += '<section class="panel"><h3>Ajouter un locataire</h3><div class="grid-form">';
+    h += champ('loc-nom', 'Nom et prénom', 'text', '', 'Camille Hervieu');
+    h += champ('loc-email', 'E-mail', 'email', '', 'camille@exemple.fr');
+    h += champ('loc-tel', 'Téléphone', 'tel', '', '06 12 34 56 78');
+    h += '</div><div class="row-actions"><button class="btn" type="button" data-action="add-locataire">Ajouter</button></div></section>';
+    h += '<section class="panel"><h3>Liste</h3>';
+    if (!state.locataires.length) h += '<p class="empty">Aucun locataire enregistré.</p>';
+    state.locataires.forEach(function (l) {
+      h += '<div class="list-line"><span class="name">' + esc(l.nom) + '</span>';
+      h += '<span class="meta">' + esc(l.email || 'pas d\'e-mail') + '</span>';
+      h += '<span class="meta">' + esc(l.tel || '') + '</span>';
+      h += '<span class="push"><button class="btn quiet" type="button" data-action="del-locataire" data-id="' + l.id + '">Supprimer</button></span></div>';
+    });
+    return h + '</section>';
+  }
+
+  function vueBaux() {
+    var h = '<h2 class="view-title">Baux</h2>';
+    h += '<p class="view-intro">Le bail porte le loyer, les charges et les dates. C\'est lui qui déclenche les échéances, le premier mois au prorata si l\'entrée tombe en cours de mois.</p>';
+
+    if (!state.lots.length || !state.locataires.length) {
+      h += '<section class="panel"><p class="empty">Il faut au moins un lot et un locataire avant de créer un bail.</p></section>';
+    } else {
+      h += '<section class="panel"><h3>Nouveau bail</h3><div class="grid-form">';
+      h += '<label class="field">Lot<select id="bail-lot">' + state.lots.map(function (l) {
+        return '<option value="' + l.id + '">' + esc(nomLot(l.id)) + '</option>';
+      }).join('') + '</select></label>';
+      h += '<label class="field">Locataire<select id="bail-locataire">' + state.locataires.map(function (l) {
+        return '<option value="' + l.id + '">' + esc(l.nom) + '</option>';
+      }).join('') + '</select></label>';
+      h += liste('bail-type-libelle', 'Type de bail', ['Location nue', 'Location meublée', 'Colocation à bail unique'], 'Location nue');
+      h += champ('bail-debut', 'Date d\'entrée', 'date', todayISO(), '');
+      h += champ('bail-fin', 'Date de sortie (si connue)', 'date', '', '');
+      h += champ('bail-loyer', 'Loyer hors charges (€)', 'text', '', '450');
+      h += champ('bail-charges', 'Provision pour charges (€)', 'text', '', '40');
+      h += '</div>';
+      h += '<div style="margin-top:12px"><label class="check"><input type="checkbox" id="bail-consent">';
+      h += '<span>Le locataire accepte de recevoir ses quittances par e-mail. Sans cet accord, la quittance doit être remise sur papier.</span></label></div>';
+      h += '<div class="row-actions"><button class="btn" type="button" data-action="add-bail">Créer le bail</button></div></section>';
+    }
+
+    h += '<section class="panel"><h3>Baux enregistrés</h3>';
+    if (!state.baux.length) h += '<p class="empty">Aucun bail.</p>';
+    state.baux.forEach(function (b) {
+      var actif = bailActif(b, currentMonth());
+      h += '<div class="list-line"><span class="name">' + esc(nomLot(b.lotId)) + '</span>';
+      h += '<span class="meta">' + esc(nomsLocataires(b)) + '</span>';
+      h += '<span class="meta">' + esc(typeBailLibelle(b)) + '</span>';
+      h += '<span class="meta">' + esc(euros(b.loyer)) + ' + ' + esc(euros(b.charges)) + ' de charges</span>';
+      h += '<span class="meta">depuis le ' + esc(frDate(b.debut)) + (b.fin ? ', jusqu\'au ' + esc(frDate(b.fin)) : '') + '</span>';
+      h += '<span class="tag ' + (actif ? 'ok' : 'part') + '">' + (actif ? 'en cours' : 'terminé') + '</span>';
+      h += '<span class="push">';
+      h += '<button class="btn ghost" type="button" data-action="documents" data-id="' + b.id + '">Documents</button>';
+      h += '<button class="btn quiet" type="button" data-action="fin-bail" data-id="' + b.id + '">Date de sortie</button>';
+      h += '<button class="btn quiet" type="button" data-action="del-bail" data-id="' + b.id + '">Supprimer</button></span></div>';
+    });
+    h += '</section>';
+    return h;
+  }
+
+  function vueDocuments() {
+    var bail = trouve(state.baux, bailCourant);
+    if (!bail) return '<p class="empty">Bail introuvable.</p>';
+    var d = detailsDe(bail);
+    var coloc = bail.type === 'colocation';
+    var meuble = bail.type === 'meuble';
+
+    var h = '<button class="btn quiet" type="button" data-action="go" data-vue="baux">Retour aux baux</button>';
+    h += '<h2 class="view-title">Documents du bail</h2>';
+    h += '<p class="view-intro">' + esc(nomLot(bail.lotId)) + ' · ' + esc(nomsLocataires(bail)) + ' · ' + esc(typeBailLibelle(bail)) + '</p>';
+
+    h += '<section class="panel"><h3>Générer</h3><div class="row-actions">';
+    h += '<button class="btn" type="button" data-action="gen" data-quoi="tout">Tout en un seul PDF</button>';
+    h += '<button class="btn ghost" type="button" data-action="gen" data-quoi="bail">Bail</button>';
+    h += '<button class="btn ghost" type="button" data-action="gen" data-quoi="annexes">Annexes à joindre</button>';
+    h += '<button class="btn ghost" type="button" data-action="gen" data-quoi="entree">État des lieux d\'entrée</button>';
+    h += '<button class="btn ghost" type="button" data-action="gen" data-quoi="sortie">État des lieux de sortie</button>';
+    h += '</div>';
+    h += '<p class="hint">Le bail suit le contrat type applicable aux contrats conclus ou renouvelés depuis le 1er octobre 2026 (décret 2026-596). Faites-le relire par un juriste avant de l\'utiliser avec un locataire.</p></section>';
+
+    if (coloc) {
+      var dispo = state.locataires.filter(function (l) { return l.id !== bail.locataireId; });
+      h += '<section class="panel"><h3>Colocataires</h3>';
+      if (!dispo.length) {
+        h += '<p class="empty">Ajoutez d\'abord les autres colocataires dans l\'onglet Locataires.</p>';
+      } else {
+        h += '<div class="grid-form"><label class="field" style="grid-column:1/-1">Colocataires (en plus du titulaire)';
+        h += '<select id="det-colocataires" multiple size="' + Math.min(5, dispo.length) + '">';
+        dispo.forEach(function (l) {
+          h += '<option value="' + l.id + '"' + ((bail.colocataires || []).indexOf(l.id) > -1 ? ' selected' : '') + '>' + esc(l.nom) + '</option>';
+        });
+        h += '</select></label></div>';
+      }
+      h += '</section>';
+    }
+
+    h += '<section class="panel"><h3>Le logement</h3><div class="grid-form">';
+    h += champ('det-surface', 'Surface habitable (m2)', 'text', d.surface, '37');
+    h += champ('det-nbPieces', 'Pièces principales', 'text', d.nbPieces, '2');
+    h += liste('det-periode', 'Période de construction', ['Avant 1949', '1949-1974', '1975-1989', '1990-2005', 'Depuis 2005'], d.periode);
+    h += liste('det-habitat', 'Type d\'habitat', ['Immeuble collectif', 'Maison individuelle'], d.habitat);
+    h += liste('det-chauffage', 'Chauffage', ['Individuel', 'Collectif'], d.chauffage);
+    h += liste('det-eauChaude', 'Eau chaude', ['Individuel', 'Collectif'], d.eauChaude);
+    h += champ('det-dpeClasse', 'Classe du DPE', 'text', d.dpeClasse, 'D');
+    h += champ('det-dpeConso', 'Consommation (kWh/m2/an)', 'text', d.dpeConso, '215');
+    h += champ('det-idFiscal', 'Identifiant fiscal du logement', 'text', d.idFiscal, '');
+    h += zone('det-autresParties', 'Autres parties du logement', d.autresParties, 'Cuisine séparée, dégagement, placards', 2);
+    h += zone('det-equipements', 'Éléments d\'équipement', d.equipements, 'Cuisine équipée, VMC, interphone', 2);
+    h += zone('det-accessoires', 'Accessoires privatifs', d.accessoires, 'Cave n°3, place de stationnement', 2);
+    h += zone('det-communes', 'Parties et équipements communs', d.communes, 'Hall, local à vélos, ascenseur', 2);
+    h += coche('det-copro', 'Le logement est en copropriété (les extraits du règlement devront être annexés).', d.copro);
+    h += coche('det-residencePrincipale', 'La commune impose une occupation à titre de résidence principale pour ce logement.', d.residencePrincipale);
+    h += '</div><div class="row-actions"><button class="btn" type="button" data-action="save-details">Enregistrer</button></div></section>';
+
+    h += '<section class="panel"><h3>Conditions financières</h3><div class="grid-form">';
+    h += champ('det-duree', 'Durée du bail (mois)', 'text', d.duree, meuble ? '12' : '36');
+    h += champ('det-depot', 'Dépôt de garantie (€)', 'text', eurosInput(d.depot), '');
+    h += liste('det-periodicite', 'Périodicité', ['Mensuelle', 'Trimestrielle'], d.periodicite);
+    h += liste('det-terme', 'Paiement', ['À échoir', 'À terme échu'], d.terme);
+    h += champ('det-jour', 'Jour de paiement', 'text', d.jour, '1');
+    h += champ('det-irl', 'Trimestre de référence IRL', 'text', d.irl, '2e trimestre 2026');
+    h += coche('det-encadrement', 'Le logement est situé en zone d\'encadrement des loyers.', d.encadrement);
+    h += champ('det-loyerRefMajore', 'Loyer de référence majoré (€)', 'text', eurosInput(d.loyerRefMajore), '');
+    h += champ('det-complement', 'Complément de loyer (€)', 'text', eurosInput(d.complement), '');
+    h += champ('det-dernierLoyer', 'Dernier loyer du précédent locataire (€)', 'text', eurosInput(d.dernierLoyer), '');
+    h += champ('det-dernierLoyerDate', 'Date de son dernier versement', 'date', d.dernierLoyerDate, '');
+    h += zone('det-travaux', 'Travaux réalisés depuis le dernier contrat', d.travaux, 'Néant', 2);
+    h += '</div>';
+    var plafond = meuble ? bail.loyer * 2 : bail.loyer;
+    if (d.depot > plafond) {
+      h += '<p class="hint">Le dépôt dépasse le plafond légal de ' + esc(euros(plafond)) + ' (' + (meuble ? 'deux mois' : 'un mois') + ' de loyer hors charges).</p>';
+    }
+    h += '<div class="row-actions"><button class="btn" type="button" data-action="save-details">Enregistrer</button></div></section>';
+
+    h += '<section class="panel"><h3>État des lieux' + (meuble ? ' et mobilier' : '') + '</h3><div class="grid-form">';
+    h += zone('det-piecesEdl', 'Pièces à faire figurer (une par ligne)', d.piecesEdl, '', 6);
+    if (meuble) h += zone('det-mobilier', 'Inventaire du mobilier (un élément par ligne)', d.mobilier, 'Literie\nTable et sièges\nRéfrigérateur', 6);
+    h += zone('det-particulieres', 'Conditions particulières du bail', d.particulieres, 'Néant', 3);
+    h += '</div><div class="row-actions"><button class="btn" type="button" data-action="save-details">Enregistrer</button></div></section>';
+    return h;
+  }
+
+  function vueReglages() {
+    var b = state.bailleur;
+    var h = '<h2 class="view-title">Réglages</h2>';
+    h += '<p class="view-intro">Ces informations figurent en tête de chaque quittance.</p>';
+    h += '<section class="panel"><h3>Bailleur</h3><div class="grid-form">';
+    h += champ('set-nom', 'Nom ou raison sociale', 'text', b.nom, 'SCI Jean Bart');
+    h += champ('set-adresse', 'Adresse', 'text', b.adresse, '3 rue des Peupliers, 62580 Gavrelle');
+    h += champ('set-ville', 'Ville de signature', 'text', b.ville, 'Gavrelle');
+    h += champ('set-email', 'E-mail de contact', 'email', b.email, '');
+    h += champ('set-tel', 'Téléphone (facultatif, figure au bail)', 'tel', b.telephone, '');
+    h += '</div><div class="row-actions"><button class="btn" type="button" data-action="save-bailleur">Enregistrer</button></div></section>';
+
+    h += '<section class="panel"><h3>Vos données</h3>';
+    h += '<p class="empty">' + esc(libelleStockage()) + '. Rien n\'est envoyé ailleurs. Gardez une sauvegarde : c\'est un fichier que vous pouvez relire plus tard.</p>';
+    h += '<div class="row-actions">';
+    h += '<button class="btn ghost" type="button" data-action="export-json">Sauvegarder (fichier)</button>';
+    h += '<button class="btn ghost" type="button" data-action="import-json">Restaurer une sauvegarde</button>';
+    h += '<button class="btn ghost" type="button" data-action="export-csv">Exporter les encaissements (CSV)</button>';
+    h += '<button class="btn quiet" type="button" data-action="reset">Tout effacer</button>';
+    h += '</div>';
+    h += '<p class="hint">Journal : ' + state.journal.length + ' évènement(s) enregistré(s). Les quittances émises ne sont jamais supprimées, seulement annulées.</p>';
+    h += '</section>';
+
+    h += '<section class="panel"><h3>Ce que fait cette version</h3>';
+    h += '<p class="empty">Parc, baux, échéances au prorata, pointage des paiements, quittances et reçus numérotés en PDF, préparation de l\'e-mail, export CSV.<br>';
+    h += 'Pas encore : rapprochement bancaire automatique, espace locataire, révision annuelle du loyer, régularisation des charges, signature électronique.</p></section>';
+    return h;
+  }
+
+  function champ(id, label, type, valeur, placeholder) {
+    return '<label class="field">' + esc(label) + '<input id="' + id + '" type="' + type + '" value="' + esc(valeur || '') + '" placeholder="' + esc(placeholder || '') + '"></label>';
+  }
+  function liste(id, label, options, valeur) {
+    var h = '<label class="field">' + esc(label) + '<select id="' + id + '">';
+    options.forEach(function (o) {
+      h += '<option value="' + esc(o) + '"' + (o === valeur ? ' selected' : '') + '>' + esc(o) + '</option>';
+    });
+    return h + '</select></label>';
+  }
+  function zone(id, label, valeur, placeholder, lignes) {
+    return '<label class="field" style="grid-column:1/-1">' + esc(label)
+      + '<textarea id="' + id + '" rows="' + (lignes || 3) + '" placeholder="' + esc(placeholder || '') + '">'
+      + esc(valeur || '') + '</textarea></label>';
+  }
+  function coche(id, label, actif) {
+    return '<label class="check" style="grid-column:1/-1"><input type="checkbox" id="' + id + '"' + (actif ? ' checked' : '') + '><span>' + esc(label) + '</span></label>';
+  }
+  function coché(id) {
+    var el = document.getElementById(id);
+    return !!(el && el.checked);
+  }
+  function val(id) {
+    var el = document.getElementById(id);
+    return el ? el.value.trim() : '';
+  }
+
+  /* ---------------------------------------------------------------- actions */
+
+  function apresChangement(message) {
+    genereEcheances();
+    sauvegarde();
+    rendu();
+    if (message) toast(message);
+  }
+
+  function ouvreModal(html) {
+    var modal = document.getElementById('modal');
+    document.getElementById('modal-body').innerHTML = html;
+    if (typeof modal.showModal === 'function') modal.showModal();
+    else modal.setAttribute('open', 'open');
+  }
+  function fermeModal() {
+    var modal = document.getElementById('modal');
+    if (typeof modal.close === 'function') modal.close();
+    else modal.removeAttribute('open');
+  }
+
+  function modalPaiement(ech) {
+    var reste = Math.max(0, totalDu(ech) - totalPaye(ech));
+    var bail = trouve(state.baux, ech.bailId);
+    var h = '<h3>Pointer un paiement</h3>';
+    h += '<p class="empty">' + esc(nomLot(bail.lotId)) + ' · ' + esc(monthLabel(ech.mois)) + ' · dû ' + esc(euros(totalDu(ech))) + '</p>';
+    if ((ech.paiements || []).length) {
+      h += '<div style="margin:12px 0">';
+      ech.paiements.forEach(function (p, i) {
+        h += '<div class="list-line"><span>' + esc(frDate(p.date)) + '</span><span class="meta">' + esc(p.moyen || '') + '</span>';
+        h += '<span class="push"><b>' + esc(euros(p.montant)) + '</b> <button class="btn quiet" type="button" data-action="del-paiement" data-id="' + ech.id + '" data-index="' + i + '">Retirer</button></span></div>';
+      });
+      h += '</div>';
+    }
+    h += '<div class="grid-form">';
+    h += champ('pay-montant', 'Montant reçu (€)', 'text', eurosInput(reste), '');
+    h += champ('pay-date', 'Date du paiement', 'date', todayISO(), '');
+    h += '<label class="field">Moyen<select id="pay-moyen"><option>Virement</option><option>Prélèvement</option><option>Chèque</option><option>Espèces</option><option>CAF / APL</option></select></label>';
+    h += '</div>';
+    h += '<div class="row-actions" style="margin-top:16px"><button class="btn" type="button" data-action="save-paiement" data-id="' + ech.id + '">Enregistrer</button>';
+    h += '<button class="btn ghost" type="button" data-action="fermer">Fermer</button></div>';
+    ouvreModal(h);
+  }
+
+  function modalFinBail(bail) {
+    var h = '<h3>Date de sortie</h3>';
+    h += '<p class="empty">' + esc(nomLot(bail.lotId)) + ' · ' + esc(nomLocataire(bail.locataireId)) + '</p>';
+    h += '<div class="grid-form" style="margin-top:12px">' + champ('fin-date', 'Dernier jour de location', 'date', bail.fin || todayISO(), '') + '</div>';
+    h += '<p class="hint">Le dernier mois sera calculé au prorata des jours occupés.</p>';
+    h += '<div class="row-actions" style="margin-top:16px"><button class="btn" type="button" data-action="save-fin" data-id="' + bail.id + '">Enregistrer</button>';
+    h += '<button class="btn ghost" type="button" data-action="fermer">Fermer</button></div>';
+    ouvreModal(h);
+  }
+
+  function confirme(question, onOui) {
+    var h = '<h3>' + esc(question) + '</h3>';
+    h += '<div class="row-actions" style="margin-top:16px"><button class="btn" type="button" data-action="confirm-oui">Confirmer</button>';
+    h += '<button class="btn ghost" type="button" data-action="fermer">Annuler</button></div>';
+    confirme._cb = onOui;
+    ouvreModal(h);
+  }
+
+  function chargeDemo() {
+    var bienId = uid('bien'), lotA = uid('lot'), lotB = uid('lot'), locA = uid('loc'), locB = uid('loc');
+    state.biens.push({ id: bienId, nom: 'Résidence des Tilleuls', adresse: '14 rue des Tilleuls, 59300 Valenciennes' });
+    state.lots.push({ id: lotA, bienId: bienId, nom: 'Appartement 1', surface: '37' });
+    state.lots.push({ id: lotB, bienId: bienId, nom: 'Appartement 2', surface: '35' });
+    state.locataires.push({ id: locA, nom: 'Camille Hervieu', email: 'camille.hervieu@exemple.fr', tel: '06 11 22 33 44' });
+    state.locataires.push({ id: locB, nom: 'Théo Barennes', email: 'theo.barennes@exemple.fr', tel: '06 55 66 77 88' });
+    var il = addMonths(currentMonth(), -3) + '-01';
+    var im = addMonths(currentMonth(), -1) + '-12';
+    state.baux.push({ id: uid('bail'), lotId: lotA, locataireId: locA, debut: il, fin: null, loyer: 46000, charges: 4000, consentement: true, consentementDate: il });
+    state.baux.push({ id: uid('bail'), lotId: lotB, locataireId: locB, debut: im, fin: null, loyer: 44000, charges: 3500, consentement: false, consentementDate: null });
+    if (!state.bailleur.nom) {
+      state.bailleur = { nom: 'SCI des Tilleuls', adresse: '3 rue des Peupliers, 62580 Gavrelle', ville: 'Gavrelle', email: '' };
+    }
+    genereEcheances();
+    var premieres = state.echeances.slice(0, 2);
+    premieres.forEach(function (e) {
+      e.paiements.push({ date: e.debut, montant: totalDu(e), moyen: 'Virement' });
+    });
+    journalise('demo', 'jeu de démonstration chargé');
+    apresChangement('Jeu de démonstration chargé. Effacez-le quand vous voulez depuis les réglages.');
+  }
+
+  function exportCsv() {
+    var lignes = [['mois', 'logement', 'locataire', 'du_euros', 'regle_euros', 'statut', 'quittance']];
+    state.echeances.slice().sort(function (a, b) { return a.mois < b.mois ? -1 : 1; }).forEach(function (e) {
+      var bail = trouve(state.baux, e.bailId);
+      if (!bail) return;
+      var q = quittanceDe(e.id);
+      lignes.push([
+        e.mois,
+        nomLot(bail.lotId),
+        nomLocataire(bail.locataireId),
+        (totalDu(e) / 100).toFixed(2),
+        (totalPaye(e) / 100).toFixed(2),
+        statut(e),
+        q ? q.numero : ''
+      ]);
+    });
+    var csv = lignes.map(function (l) {
+      return l.map(function (c) { return '"' + String(c).replace(/"/g, '""') + '"'; }).join(';');
+    }).join('\r\n');
+    sauveFichier('encaissements.csv', csv, 'text/csv');
+  }
+
+  function sauveFichier(nom, contenu, mime) {
+    var blob = new Blob([contenu], { type: mime });
+    if (window.claude && typeof window.claude.use === 'function') {
+      window.claude.use('downloads').then(function (dl) {
+        if (!dl) return fallbackTelecharge(blob, nom);
+        dl.save({ filename: nom, data: blob }).then(function () { toast('Fichier enregistré.'); })
+          .catch(function (err) { if (!err || err.code !== 'declined') fallbackTelecharge(blob, nom); });
+      }).catch(function () { fallbackTelecharge(blob, nom); });
+    } else {
+      fallbackTelecharge(blob, nom);
+    }
+  }
+
+  function importJson() {
+    var input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'application/json,.json';
+    input.addEventListener('change', function () {
+      var f = input.files && input.files[0];
+      if (!f) return;
+      var reader = new FileReader();
+      reader.onload = function () {
+        try {
+          state = normalise(JSON.parse(String(reader.result)));
+          journalise('restauration', f.name);
+          apresChangement('Sauvegarde restaurée.');
+        } catch (e) {
+          toast('Ce fichier n\'est pas une sauvegarde lisible.');
+        }
+      };
+      reader.readAsText(f);
+    });
+    input.click();
+  }
+
+  /* ------------------------------------------------------------ évènements */
+
+  document.addEventListener('click', function (ev) {
+    var btn = ev.target.closest ? ev.target.closest('button') : null;
+    if (!btn) return;
+    var action = btn.getAttribute('data-action');
+    var id = btn.getAttribute('data-id');
+
+    if (btn.hasAttribute('data-vue') && !action) {
+      vue = btn.getAttribute('data-vue');
+      rendu();
+      document.getElementById('view').focus();
+      return;
+    }
+    if (!action) return;
+
+    if (action === 'go') { vue = btn.getAttribute('data-vue'); rendu(); return; }
+    if (action === 'fermer') { fermeModal(); return; }
+    if (action === 'confirm-oui') { fermeModal(); if (confirme._cb) confirme._cb(); return; }
+    if (action === 'demo') { chargeDemo(); return; }
+
+    if (action === 'mois') { moisAffiche = addMonths(moisAffiche, parseInt(btn.getAttribute('data-delta'), 10)); rendu(); return; }
+    if (action === 'mois-courant') { moisAffiche = currentMonth(); rendu(); return; }
+
+    if (action === 'add-bien') {
+      var nom = val('bien-nom'), adresse = val('bien-adresse');
+      if (!nom || !adresse) { toast('Indiquez un nom et une adresse.'); return; }
+      state.biens.push({ id: uid('bien'), nom: nom, adresse: adresse });
+      journalise('bien', nom);
+      apresChangement('Bien ajouté.');
+      return;
+    }
+    if (action === 'add-lot') {
+      var ln = val('lot-nom-' + id);
+      if (!ln) { toast('Donnez un nom au lot.'); return; }
+      state.lots.push({ id: uid('lot'), bienId: id, nom: ln, surface: val('lot-surface-' + id) });
+      journalise('lot', ln);
+      apresChangement('Lot ajouté.');
+      return;
+    }
+    if (action === 'del-lot') {
+      var utilise = state.baux.some(function (b) { return b.lotId === id; });
+      if (utilise) { toast('Ce lot porte un bail : supprimez d\'abord le bail.'); return; }
+      confirme('Supprimer ce lot ?', function () {
+        state.lots = state.lots.filter(function (l) { return l.id !== id; });
+        apresChangement('Lot supprimé.');
+      });
+      return;
+    }
+    if (action === 'del-bien') {
+      var lots = state.lots.filter(function (l) { return l.bienId === id; });
+      var bloque = lots.some(function (l) { return state.baux.some(function (b) { return b.lotId === l.id; }); });
+      if (bloque) { toast('Un bail existe sur ce bien : supprimez-le d\'abord.'); return; }
+      confirme('Supprimer ce bien et ses lots ?', function () {
+        state.lots = state.lots.filter(function (l) { return l.bienId !== id; });
+        state.biens = state.biens.filter(function (b) { return b.id !== id; });
+        apresChangement('Bien supprimé.');
+      });
+      return;
+    }
+    if (action === 'add-locataire') {
+      var ln2 = val('loc-nom');
+      if (!ln2) { toast('Le nom est obligatoire.'); return; }
+      state.locataires.push({ id: uid('loc'), nom: ln2, email: val('loc-email'), tel: val('loc-tel') });
+      journalise('locataire', ln2);
+      apresChangement('Locataire ajouté.');
+      return;
+    }
+    if (action === 'del-locataire') {
+      var lie = state.baux.some(function (b) { return b.locataireId === id; });
+      if (lie) { toast('Ce locataire a un bail : supprimez-le d\'abord.'); return; }
+      confirme('Supprimer ce locataire ?', function () {
+        state.locataires = state.locataires.filter(function (l) { return l.id !== id; });
+        apresChangement('Locataire supprimé.');
+      });
+      return;
+    }
+    if (action === 'add-bail') {
+      var loyer = centsFromInput(val('bail-loyer'));
+      var debut = val('bail-debut');
+      if (!debut) { toast('Indiquez la date d\'entrée.'); return; }
+      if (loyer <= 0) { toast('Indiquez un loyer.'); return; }
+      var fin = val('bail-fin') || null;
+      if (fin && fin < debut) { toast('La date de sortie précède la date d\'entrée.'); return; }
+      var consent = document.getElementById('bail-consent');
+      state.baux.push({
+        id: uid('bail'),
+        lotId: val('bail-lot') || document.getElementById('bail-lot').value,
+        locataireId: document.getElementById('bail-locataire').value,
+        debut: debut, fin: fin,
+        type: (function () {
+          var v = val('bail-type-libelle');
+          return v === 'Location meublée' ? 'meuble' : (v === 'Colocation à bail unique' ? 'colocation' : 'nu');
+        })(),
+        colocataires: [],
+        loyer: loyer, charges: centsFromInput(val('bail-charges')),
+        consentement: !!(consent && consent.checked),
+        consentementDate: consent && consent.checked ? todayISO() : null
+      });
+      journalise('bail', 'création');
+      apresChangement('Bail créé, échéances générées.');
+      return;
+    }
+    if (action === 'documents') { bailCourant = id; vue = 'documents'; rendu(); window.scrollTo(0, 0); return; }
+    if (action === 'save-details') {
+      var bd = trouve(state.baux, bailCourant);
+      if (!bd) return;
+      var dd = detailsDe(bd);
+      ['surface', 'nbPieces', 'dpeClasse', 'dpeConso', 'idFiscal', 'autresParties', 'equipements',
+       'accessoires', 'communes', 'duree', 'jour', 'irl', 'travaux', 'mobilier', 'particulieres',
+       'piecesEdl', 'dernierLoyerDate'].forEach(function (k) {
+        var el = document.getElementById('det-' + k);
+        if (el) dd[k] = el.value;
+      });
+      ['periode', 'habitat', 'chauffage', 'eauChaude', 'periodicite', 'terme'].forEach(function (k) {
+        var el = document.getElementById('det-' + k);
+        if (el) dd[k] = el.value;
+      });
+      ['depot', 'loyerRefMajore', 'complement', 'dernierLoyer'].forEach(function (k) {
+        var el = document.getElementById('det-' + k);
+        if (el) dd[k] = centsFromInput(el.value);
+      });
+      if (document.getElementById('det-copro')) dd.copro = coché('det-copro');
+      if (document.getElementById('det-residencePrincipale')) dd.residencePrincipale = coché('det-residencePrincipale');
+      if (document.getElementById('det-encadrement')) dd.encadrement = coché('det-encadrement');
+      var multi = document.getElementById('det-colocataires');
+      if (multi) {
+        bd.colocataires = Array.prototype.slice.call(multi.selectedOptions || []).map(function (o) { return o.value; });
+      }
+      journalise('bail', 'informations complétées');
+      sauvegarde();
+      rendu();
+      toast('Informations enregistrées.');
+      return;
+    }
+    if (action === 'gen') {
+      var bg = trouve(state.baux, bailCourant);
+      if (!bg) return;
+      if (!state.bailleur.nom) { toast('Renseignez d\'abord le bailleur dans les réglages.'); vue = 'reglages'; rendu(); return; }
+      var quoi = btn.getAttribute('data-quoi');
+      var pages = [];
+      var nom = '';
+      if (quoi === 'bail') { pages = pagesBail(bg); nom = nomDocument(bg, 'bail'); }
+      else if (quoi === 'annexes') { pages = pagesAnnexes(bg); nom = nomDocument(bg, 'annexes'); }
+      else if (quoi === 'entree') { pages = pagesEtatDesLieux(bg, 'entree'); nom = nomDocument(bg, 'etat-des-lieux-entree'); }
+      else if (quoi === 'sortie') { pages = pagesEtatDesLieux(bg, 'sortie'); nom = nomDocument(bg, 'etat-des-lieux-sortie'); }
+      else {
+        pages = pagesBail(bg).concat(pagesAnnexes(bg)).concat(pagesEtatDesLieux(bg, 'entree'));
+        nom = nomDocument(bg, 'dossier-location');
+      }
+      journalise('document', quoi + ' · ' + nomLot(bg.lotId));
+      sauvegarde();
+      livrePdf(nom, buildPdf(pages));
+      return;
+    }
+    if (action === 'fin-bail') { modalFinBail(trouve(state.baux, id)); return; }
+    if (action === 'save-fin') {
+      var bail = trouve(state.baux, id);
+      var d = val('fin-date');
+      if (!bail || !d) return;
+      if (d < bail.debut) { toast('La date de sortie précède la date d\'entrée.'); return; }
+      bail.fin = d;
+      state.echeances = state.echeances.filter(function (e) {
+        if (e.bailId !== bail.id) return true;
+        if (e.mois > d.slice(0, 7)) return !!quittanceDe(e.id) || totalPaye(e) > 0;
+        return true;
+      });
+      var derniere = echeanceDe(bail.id, d.slice(0, 7));
+      if (derniere && !quittanceDe(derniere.id)) {
+        var maj = construitEcheance(bail, d.slice(0, 7));
+        derniere.loyer = maj.loyer;
+        derniere.charges = maj.charges;
+        derniere.prorata = maj.prorata;
+        derniere.fin = maj.fin;
+      }
+      journalise('bail', 'date de sortie ' + d);
+      fermeModal();
+      apresChangement('Date de sortie enregistrée.');
+      return;
+    }
+    if (action === 'del-bail') {
+      var aDesDocs = state.quittances.some(function (q) {
+        var e = trouve(state.echeances, q.echeanceId);
+        return e && e.bailId === id;
+      });
+      if (aDesDocs) { toast('Des quittances existent sur ce bail : il ne peut plus être supprimé.'); return; }
+      confirme('Supprimer ce bail et ses échéances ?', function () {
+        state.echeances = state.echeances.filter(function (e) { return e.bailId !== id; });
+        state.baux = state.baux.filter(function (b) { return b.id !== id; });
+        journalise('bail', 'suppression');
+        apresChangement('Bail supprimé.');
+      });
+      return;
+    }
+    if (action === 'paiement') { modalPaiement(trouve(state.echeances, id)); return; }
+    if (action === 'save-paiement') {
+      var ech = trouve(state.echeances, id);
+      if (!ech) return;
+      var montant = centsFromInput(val('pay-montant'));
+      if (montant <= 0) { toast('Indiquez un montant.'); return; }
+      var moyenEl = document.getElementById('pay-moyen');
+      ech.paiements.push({ date: val('pay-date') || todayISO(), montant: montant, moyen: moyenEl ? moyenEl.value : '' });
+      journalise('paiement', euros(montant) + ' · ' + ech.mois);
+      fermeModal();
+      apresChangement('Paiement enregistré.');
+      return;
+    }
+    if (action === 'del-paiement') {
+      var ech2 = trouve(state.echeances, id);
+      var idx = parseInt(btn.getAttribute('data-index'), 10);
+      if (!ech2 || isNaN(idx)) return;
+      if (quittanceDe(ech2.id)) { toast('Une quittance a été émise : annulez-la d\'abord.'); return; }
+      ech2.paiements.splice(idx, 1);
+      journalise('paiement', 'retrait');
+      sauvegarde();
+      modalPaiement(ech2);
+      rendu();
+      return;
+    }
+    if (action === 'emettre') {
+      var e3 = trouve(state.echeances, id);
+      if (!e3) return;
+      if (!state.bailleur.nom) { toast('Renseignez d\'abord le bailleur dans les réglages.'); vue = 'reglages'; rendu(); return; }
+      var doc = emetDocument(e3);
+      if (!doc) return;
+      sauvegarde();
+      rendu();
+      telecharge(doc);
+      return;
+    }
+    if (action === 'pdf') {
+      var q1 = trouve(state.quittances, id);
+      if (q1) telecharge(q1);
+      return;
+    }
+    if (action === 'email') {
+      var q2 = trouve(state.quittances, id);
+      if (!q2) return;
+      var bailEmail = null;
+      for (var i = 0; i < state.baux.length; i++) {
+        if (state.baux[i].locataireId === q2.locataireId) { bailEmail = state.baux[i]; break; }
+      }
+      if (bailEmail && !bailEmail.consentement) {
+        confirme('Ce locataire n\'a pas accepté l\'envoi par e-mail. Continuer quand même ?', function () { prepareEmail(q2); });
+        return;
+      }
+      prepareEmail(q2);
+      return;
+    }
+    if (action === 'annuler-quittance') {
+      confirme('Annuler ce document ? Il restera visible, marqué annulé.', function () {
+        var q3 = trouve(state.quittances, id);
+        if (!q3) return;
+        q3.annulee = true;
+        journalise('annulation', q3.numero);
+        apresChangement('Document annulé.');
+      });
+      return;
+    }
+    if (action === 'save-bailleur') {
+      state.bailleur = { nom: val('set-nom'), adresse: val('set-adresse'), ville: val('set-ville'), email: val('set-email'), telephone: val('set-tel') };
+      journalise('reglages', 'bailleur');
+      apresChangement('Réglages enregistrés.');
+      return;
+    }
+    if (action === 'export-json') {
+      sauveFichier('sauvegarde-gestion-locative.json', JSON.stringify(state, null, 2), 'application/json');
+      return;
+    }
+    if (action === 'import-json') { importJson(); return; }
+    if (action === 'export-csv') { exportCsv(); return; }
+    if (action === 'reset') {
+      confirme('Effacer toutes les données, y compris les quittances ?', function () {
+        state = etatVide();
+        apresChangement('Tout est effacé.');
+      });
+      return;
+    }
+  });
+
+  document.getElementById('modal').addEventListener('close', function () {
+    document.getElementById('modal-body').innerHTML = '';
+  });
+
+  initStockage();
+
+  if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
+    window.addEventListener('load', function () {
+      navigator.serviceWorker.register('./sw.js').catch(function () { /* hors ligne non disponible */ });
+    });
+  }
+})();
+</script>
+</body>
+</html>

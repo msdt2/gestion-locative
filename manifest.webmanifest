@@ -1,0 +1,15 @@
+{
+  "name": "Gestion locative — quittances, baux, états des lieux",
+  "short_name": "Quittance",
+  "description": "Suivi des loyers, quittances, baux et états des lieux. Données conservées dans le navigateur.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#eef1f0",
+  "theme_color": "#12665a",
+  "lang": "fr",
+  "icons": [
+    { "src": "./icone-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "./icone-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

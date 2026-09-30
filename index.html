@@ -5,171 +5,284 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Quittance — gestion locative</title>
 <meta name="description" content="Gestion locative simple : quittances, baux et états des lieux. Vos données restent dans votre navigateur.">
-<meta name="theme-color" content="#12665a">
+<meta name="theme-color" content="#0e6a57">
 <link rel="manifest" href="./manifest.webmanifest">
 <link rel="icon" href="./icone-192.png" sizes="192x192">
 <link rel="apple-touch-icon" href="./icone-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Public+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&family=Instrument+Serif&display=swap">
 <style>
+  /* =====================================================================
+     Charte graphique — « Registre »
+     Papier clair, encre profonde, un seul accent vert. Les nombres sont
+     tabulaires, les documents priment sur la décoration.
+     ===================================================================== */
   :root {
     color-scheme: light dark;
-    --paper: #eef1f0;
+
+    /* couleurs */
+    --fond: #f4f3ef;
     --surface: #ffffff;
-    --surface-2: #f6f8f7;
-    --ink: #111d1a;
-    --ink-soft: #5b6b66;
-    --line: #d2dad7;
-    --line-strong: #b4c0bc;
-    --accent: #12665a;
-    --accent-soft: #e2efec;
-    --warn: #8f3a2c;
-    --warn-soft: #f7e9e5;
-    --radius: 10px;
+    --surface-2: #faf9f5;
+    --encre: #16201d;
+    --encre-2: #4c5a55;
+    --encre-3: #7a8781;
+    --trait: #e3e0d8;
+    --trait-fort: #cbc7bb;
+    --accent: #0e6a57;
+    --accent-fond: #e2efea;
+    --accent-vif: #0a5344;
+    --alerte: #9a3324;
+    --alerte-fond: #f7e8e3;
+    --attention: #8a5a12;
+    --attention-fond: #f8efdd;
+
+    /* rythme */
+    --e1: 4px; --e2: 8px; --e3: 12px; --e4: 20px; --e5: 32px; --e6: 48px;
+    --r-s: 8px; --r-m: 12px; --r-l: 18px;
+    --ombre: 0 1px 2px rgba(22, 32, 29, .05), 0 2px 8px rgba(22, 32, 29, .04);
+    --ombre-haute: 0 8px 28px rgba(22, 32, 29, .14);
+
+    /* typographie */
+    --titre: 'Instrument Serif', Iowan Old Style, Georgia, serif;
+    --texte: 'Instrument Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+
     box-sizing: border-box;
     padding-top: env(safe-area-inset-top, 0px);
     padding-bottom: env(safe-area-inset-bottom, 0px);
   }
   :root:not([data-theme="light"]) {
     @media (prefers-color-scheme: dark) {
-      --paper: #101614;
-      --surface: #18201e;
-      --surface-2: #1e2725;
-      --ink: #e8efec;
-      --ink-soft: #9fb0ab;
-      --line: #2c3835;
-      --line-strong: #3d4c48;
-      --accent: #59b8a5;
-      --accent-soft: #1b2e2b;
-      --warn: #e09183;
-      --warn-soft: #33221e;
+      --fond: #121614;
+      --surface: #1a201d;
+      --surface-2: #212823;
+      --encre: #e9eeeb;
+      --encre-2: #adb9b4;
+      --encre-3: #8b9792;
+      --trait: #2b332f;
+      --trait-fort: #3d4741;
+      --accent: #5fc0a6;
+      --accent-fond: #17302a;
+      --accent-vif: #7fd4bc;
+      --alerte: #e79a8a;
+      --alerte-fond: #33211c;
+      --attention: #d9b168;
+      --attention-fond: #2e2617;
+      --ombre: 0 1px 2px rgba(0, 0, 0, .3);
+      --ombre-haute: 0 10px 30px rgba(0, 0, 0, .5);
     }
   }
   :root[data-theme="dark"] {
-    --paper: #101614;
-    --surface: #18201e;
-    --surface-2: #1e2725;
-    --ink: #e8efec;
-    --ink-soft: #9fb0ab;
-    --line: #2c3835;
-    --line-strong: #3d4c48;
-    --accent: #59b8a5;
-    --accent-soft: #1b2e2b;
-    --warn: #e09183;
-    --warn-soft: #33221e;
+    --fond: #121614; --surface: #1a201d; --surface-2: #212823;
+    --encre: #e9eeeb; --encre-2: #adb9b4; --encre-3: #8b9792;
+    --trait: #2b332f; --trait-fort: #3d4741;
+    --accent: #5fc0a6; --accent-fond: #17302a; --accent-vif: #7fd4bc;
+    --alerte: #e79a8a; --alerte-fond: #33211c;
+    --attention: #d9b168; --attention-fond: #2e2617;
   }
+
   *, *::before, *::after { box-sizing: border-box; }
-  html { scroll-padding-top: env(safe-area-inset-top, 0px); }
+  html { scroll-padding-top: calc(72px + env(safe-area-inset-top, 0px)); }
   body {
     margin: 0;
-    background: var(--paper);
-    color: var(--ink);
-    font-family: 'Public Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-    font-size: 15px;
-    line-height: 1.45;
+    background: var(--fond);
+    color: var(--encre);
+    font-family: var(--texte);
+    font-size: 15.5px;
+    line-height: 1.5;
     -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
   }
-  a { color: var(--accent); }
-  .shell { max-width: 1120px; margin: 0 auto; padding: 20px 18px 64px; }
+  a { color: var(--accent); text-underline-offset: 2px; }
+
+  /* ------------------------------------------------------------ ossature */
+  .shell { max-width: 1060px; margin: 0 auto; padding: 0 var(--e4) var(--e6); }
   header.top {
-    display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px 18px;
-    padding-bottom: 14px; border-bottom: 2px solid var(--ink);
+    display: flex; flex-wrap: wrap; align-items: center; gap: var(--e2) var(--e4);
+    padding: var(--e4) 0 var(--e3);
   }
-  .wordmark { font-size: 21px; font-weight: 700; letter-spacing: -0.015em; margin: 0; }
-  .wordmark span { font-weight: 400; color: var(--ink-soft); }
-  .storage-state { margin-left: auto; font-size: 12.5px; color: var(--ink-soft); }
-  .storage-state b { font-weight: 600; color: var(--ink); }
-  nav.tabs { display: flex; flex-wrap: wrap; gap: 2px; margin: 14px 0 22px; }
+  .wordmark {
+    margin: 0; font-family: var(--titre); font-weight: 400;
+    font-size: 27px; letter-spacing: -0.01em; line-height: 1.1;
+  }
+  .wordmark span { color: var(--encre-3); font-size: 19px; }
+  .storage-state {
+    margin-left: auto; font-size: 12.5px; color: var(--encre-3);
+    background: var(--surface); border: 1px solid var(--trait);
+    border-radius: 999px; padding: 5px 12px;
+  }
+  .storage-state b { font-weight: 500; color: var(--encre-2); }
+
+  nav.tabs {
+    display: flex; gap: var(--e1); margin: 0 0 var(--e5);
+    overflow-x: auto; scrollbar-width: none;
+    padding-bottom: var(--e1); position: sticky; top: 0; z-index: 5;
+    background: linear-gradient(var(--fond) 72%, transparent);
+    padding-top: var(--e2);
+  }
+  nav.tabs::-webkit-scrollbar { display: none; }
   nav.tabs button {
-    font: inherit; font-size: 14px; font-weight: 500;
-    background: transparent; color: var(--ink-soft);
-    border: 1px solid transparent; border-radius: var(--radius);
-    padding: 9px 14px; min-height: 44px; cursor: pointer;
+    display: inline-flex; align-items: center; gap: 7px; white-space: nowrap;
+    font: inherit; font-size: 14.5px; font-weight: 500;
+    background: transparent; color: var(--encre-2);
+    border: 1px solid transparent; border-radius: 999px;
+    padding: 9px 15px; min-height: 42px; cursor: pointer;
+    transition: background .12s ease, color .12s ease;
   }
-  nav.tabs button:hover { color: var(--ink); background: var(--surface-2); }
-  nav.tabs button[aria-current="page"] { background: var(--surface); color: var(--ink); border-color: var(--line); font-weight: 600; }
-  nav.tabs button:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, a:focus-visible {
-    outline: 2px solid var(--accent); outline-offset: 2px;
+  nav.tabs button svg { width: 16px; height: 16px; flex: none; }
+  nav.tabs button:hover { background: var(--surface-2); color: var(--encre); }
+  nav.tabs button[aria-current="page"] {
+    background: var(--encre); color: var(--fond); border-color: var(--encre);
   }
-  h2.view-title { font-size: 22px; margin: 0 0 4px; letter-spacing: -0.01em; }
-  p.view-intro { margin: 0 0 20px; color: var(--ink-soft); max-width: 68ch; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+
+  /* -------------------------------------------------------------- titres */
+  h2.view-title {
+    font-family: var(--titre); font-weight: 400; font-size: 34px;
+    letter-spacing: -0.015em; line-height: 1.12; margin: 0 0 var(--e2);
+  }
+  p.view-intro { margin: 0 0 var(--e5); color: var(--encre-2); max-width: 64ch; font-size: 15.5px; }
   section.panel {
-    background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
-    padding: 18px 18px 20px; margin-bottom: 18px;
+    background: var(--surface); border: 1px solid var(--trait);
+    border-radius: var(--r-l); box-shadow: var(--ombre);
+    padding: var(--e4) var(--e4) var(--e4); margin-bottom: var(--e4);
   }
-  section.panel > h3 { margin: 0 0 14px; font-size: 16px; font-weight: 600; }
-  .row-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+  section.panel > h3 {
+    margin: 0 0 var(--e4); font-size: 16px; font-weight: 600; letter-spacing: -0.005em;
+  }
+
+  /* ------------------------------------------------------------- boutons */
   button.btn {
-    font: inherit; font-size: 14px; font-weight: 600; cursor: pointer;
+    font: inherit; font-size: 14.5px; font-weight: 600; cursor: pointer;
     background: var(--accent); color: #fff; border: 1px solid var(--accent);
-    border-radius: 8px; padding: 10px 15px; min-height: 44px;
+    border-radius: 999px; padding: 10px 18px; min-height: 44px;
+    display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+    transition: background .12s ease, border-color .12s ease, color .12s ease;
   }
-  :root[data-theme="dark"] button.btn, :root:not([data-theme="light"]) button.btn { color: #06120f; }
-  button.btn:hover { filter: brightness(1.08); }
-  button.btn.ghost { background: var(--surface); color: var(--ink); border-color: var(--line-strong); }
-  button.btn.ghost:hover { background: var(--surface-2); filter: none; }
+  button.btn:hover { background: var(--accent-vif); border-color: var(--accent-vif); }
+  :root[data-theme="dark"] button.btn { color: #06120f; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) button.btn { color: #06120f; } }
+  button.btn.ghost {
+    background: var(--surface); color: var(--encre); border-color: var(--trait-fort);
+  }
+  button.btn.ghost:hover { background: var(--surface-2); border-color: var(--encre-3); }
   button.btn.quiet {
-    background: transparent; color: var(--ink-soft); border-color: transparent;
-    padding: 6px 8px; min-height: 36px; font-weight: 500; text-decoration: underline;
+    background: transparent; color: var(--encre-3); border-color: transparent;
+    padding: 8px 10px; min-height: 40px; font-weight: 500;
   }
-  button.btn.quiet:hover { color: var(--ink); filter: none; }
-  button.btn:disabled { opacity: 0.45; cursor: not-allowed; filter: none; }
-  .grid-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px 14px; }
-  label.field { display: flex; flex-direction: column; gap: 5px; font-size: 13px; color: var(--ink-soft); }
-  label.field input, label.field select, label.field textarea {
-    font: inherit; font-size: 15px; color: var(--ink);
-    background: var(--surface-2); border: 1px solid var(--line-strong);
-    border-radius: 8px; padding: 10px 11px; min-height: 44px; width: 100%;
+  button.btn.quiet:hover { background: var(--surface-2); color: var(--encre); }
+  button.btn:disabled { opacity: .4; cursor: not-allowed; background: var(--surface); color: var(--encre-3); border-color: var(--trait); }
+  .row-actions { display: flex; flex-wrap: wrap; gap: var(--e2); margin-top: var(--e3); }
+
+  /* ----------------------------------------------------------- formulaires */
+  .grid-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: var(--e3) var(--e3); }
+  label.field { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--encre-2); font-weight: 500; }
+  input, select, textarea {
+    font: inherit; font-size: 15.5px; color: var(--encre);
+    background: var(--surface-2); border: 1px solid var(--trait-fort);
+    border-radius: var(--r-s); padding: 10px 12px; min-height: 44px; width: 100%;
+    transition: border-color .12s ease, box-shadow .12s ease;
   }
-  label.check { display: flex; align-items: flex-start; gap: 9px; font-size: 13.5px; color: var(--ink); }
-  label.check input { width: 18px; height: 18px; margin-top: 2px; }
+  textarea { line-height: 1.5; resize: vertical; }
+  input:hover, select:hover, textarea:hover { border-color: var(--encre-3); }
+  input:focus, select:focus, textarea:focus {
+    outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-fond);
+  }
+  input:disabled, select:disabled, textarea:disabled { opacity: .65; cursor: default; }
+  label.check { display: flex; align-items: flex-start; gap: 10px; font-size: 14px; color: var(--encre); font-weight: 400; }
+  label.check input { width: 18px; height: 18px; min-height: 0; margin-top: 3px; accent-color: var(--accent); }
+
+  /* --------------------------------------------------------------- tables */
   table.ledger { width: 100%; border-collapse: collapse; font-size: 14.5px; }
   table.ledger th {
-    text-align: left; font-weight: 600; font-size: 12.5px; color: var(--ink-soft);
-    border-bottom: 1px solid var(--line-strong); padding: 0 10px 8px 0;
+    text-align: left; font-weight: 600; font-size: 12px; color: var(--encre-3);
+    letter-spacing: .02em; border-bottom: 1px solid var(--trait-fort);
+    padding: 0 var(--e3) var(--e2) 0;
   }
-  table.ledger td { padding: 11px 10px 11px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+  table.ledger td { padding: var(--e3) var(--e3) var(--e3) 0; border-bottom: 1px solid var(--trait); vertical-align: middle; }
   table.ledger tr:last-child td { border-bottom: none; }
   td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; padding-right: 0; }
-  .scroll-x { overflow-x: auto; }
-  .tag { display: inline-block; font-size: 12px; font-weight: 600; border-radius: 999px; padding: 3px 9px; white-space: nowrap; }
-  .tag.ok { background: var(--accent-soft); color: var(--accent); }
-  .tag.late { background: var(--warn-soft); color: var(--warn); }
-  .tag.part { background: var(--surface-2); color: var(--ink-soft); border: 1px solid var(--line-strong); }
-  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px; }
-  .stat { border-left: 3px solid var(--line-strong); padding-left: 12px; }
+  .scroll-x { overflow-x: auto; margin: 0 calc(var(--e4) * -1); padding: 0 var(--e4); }
+
+  /* ------------------------------------------------------------ étiquettes */
+  .tag {
+    display: inline-block; font-size: 12px; font-weight: 600; letter-spacing: .01em;
+    border-radius: 999px; padding: 4px 10px; white-space: nowrap;
+  }
+  .tag.ok { background: var(--accent-fond); color: var(--accent-vif); }
+  .tag.late { background: var(--alerte-fond); color: var(--alerte); }
+  .tag.part { background: var(--surface-2); color: var(--encre-2); border: 1px solid var(--trait-fort); }
+
+  /* --------------------------------------------------------------- chiffres */
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: var(--e4); }
+  .stat { border-left: 2px solid var(--trait-fort); padding-left: var(--e3); }
   .stat.is-accent { border-left-color: var(--accent); }
-  .stat.is-warn { border-left-color: var(--warn); }
-  .stat .k { font-size: 12.5px; color: var(--ink-soft); }
-  .stat .v { font-size: 25px; font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
-  .empty { color: var(--ink-soft); font-size: 14.5px; }
-  .month-nav { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
-  .month-nav .label { font-weight: 600; font-size: 17px; min-width: 190px; }
-  .hint { font-size: 13px; color: var(--ink-soft); margin: 10px 0 0; }
-  .list-line { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: baseline; padding: 11px 0; border-bottom: 1px solid var(--line); }
+  .stat.is-warn { border-left-color: var(--alerte); }
+  .stat .k { font-size: 12.5px; color: var(--encre-3); font-weight: 500; }
+  .stat .v {
+    font-family: var(--titre); font-size: 31px; line-height: 1.15;
+    font-variant-numeric: tabular-nums; letter-spacing: -0.01em; margin-top: 2px;
+  }
+
+  /* ----------------------------------------------------------------- divers */
+  .empty { color: var(--encre-2); font-size: 14.5px; }
+  .hint { font-size: 13px; color: var(--encre-3); margin: var(--e3) 0 0; }
+  .banner {
+    display: flex; flex-wrap: wrap; align-items: center; gap: var(--e3);
+    background: var(--attention-fond); border: 1px solid var(--attention);
+    border-radius: var(--r-m); padding: var(--e3) var(--e4); margin-bottom: var(--e4);
+    font-size: 14.5px; color: var(--encre);
+  }
+  .banner .push { margin-left: auto; }
+  .month-nav { display: flex; align-items: center; gap: var(--e2); margin-bottom: var(--e4); flex-wrap: wrap; }
+  .month-nav .label {
+    font-family: var(--titre); font-size: 24px; min-width: 190px; letter-spacing: -0.01em;
+  }
+  .list-line {
+    display: flex; flex-wrap: wrap; gap: 6px var(--e3); align-items: center;
+    padding: var(--e3) 0; border-bottom: 1px solid var(--trait);
+  }
   .list-line:last-child { border-bottom: none; }
   .list-line .name { font-weight: 600; }
-  .list-line .meta { color: var(--ink-soft); font-size: 13.5px; }
-  .list-line .push { margin-left: auto; display: flex; gap: 6px; }
-  dialog {
-    border: 1px solid var(--line-strong); border-radius: var(--radius); padding: 0;
-    background: var(--surface); color: var(--ink); max-width: 520px; width: calc(100% - 32px);
+  .list-line .meta { color: var(--encre-3); font-size: 13.5px; }
+  .list-line .push { margin-left: auto; display: flex; gap: 6px; flex-wrap: wrap; }
+  .edl-ligne {
+    display: flex; flex-wrap: wrap; gap: var(--e2); align-items: center;
+    padding: var(--e2) 0; border-bottom: 1px solid var(--trait);
   }
-  dialog::backdrop { background: rgba(8, 20, 17, 0.45); }
-  .dialog-body { padding: 20px; }
-  .dialog-body h3 { margin: 0 0 14px; font-size: 18px; }
+  .edl-ligne:last-of-type { border-bottom: none; }
+  .edl-ligne .nom { min-width: 150px; font-size: 14.5px; }
+  .edl-ligne select { min-width: 118px; width: auto; }
+  .edl-ligne input { flex: 1; min-width: 170px; }
+  .titre-piece { font-family: var(--titre); font-size: 22px; font-weight: 400; padding: 8px 12px; }
+
+  dialog {
+    border: 1px solid var(--trait-fort); border-radius: var(--r-l); padding: 0;
+    background: var(--surface); color: var(--encre); box-shadow: var(--ombre-haute);
+    max-width: 540px; width: calc(100% - 32px);
+  }
+  dialog::backdrop { background: rgba(10, 20, 18, .5); }
+  .dialog-body { padding: var(--e4); }
+  .dialog-body h3 { margin: 0 0 var(--e3); font-family: var(--titre); font-weight: 400; font-size: 24px; letter-spacing: -0.01em; }
+
   .toast {
     position: fixed; left: 50%; transform: translateX(-50%);
-    bottom: calc(18px + env(safe-area-inset-bottom, 0px));
-    background: var(--ink); color: var(--paper); padding: 11px 16px; border-radius: 8px;
-    font-size: 14px; font-weight: 500; max-width: 90%; z-index: 40;
+    bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+    background: var(--encre); color: var(--fond);
+    padding: 12px 18px; border-radius: 999px; box-shadow: var(--ombre-haute);
+    font-size: 14.5px; font-weight: 500; max-width: 90%; z-index: 40; text-align: center;
   }
   .toast[hidden] { display: none; }
-  .split { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
-  @media (max-width: 720px) {
-    .split { grid-template-columns: 1fr; }
-    .month-nav .label { min-width: 0; font-size: 15px; }
+
+  @media (max-width: 620px) {
+    .shell { padding: 0 var(--e3) var(--e6); }
+    h2.view-title { font-size: 28px; }
+    .wordmark { font-size: 23px; }
+    .storage-state { margin-left: 0; }
+    .month-nav .label { min-width: 0; font-size: 20px; }
+    section.panel { padding: var(--e3); border-radius: var(--r-m); }
+    .scroll-x { margin: 0 calc(var(--e3) * -1); padding: 0 var(--e3); }
   }
   @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
 </style>
@@ -177,7 +290,7 @@
 <body>
 <div class="shell">
   <header class="top">
-    <h1 class="wordmark">Quittance<span> · gestion locative</span></h1>
+    <h1 class="wordmark">Registre <span>gestion locative</span></h1>
     <div class="storage-state" id="storage-state">Chargement…</div>
   </header>
   <nav class="tabs" id="tabs" aria-label="Sections"></nav>
@@ -508,13 +621,14 @@
       bailleur: { nom: '', adresse: '', ville: '', email: '' },
       biens: [], lots: [], locataires: [], baux: [], echeances: [], quittances: [], etatsDesLieux: [],
       numeros: {},
-      journal: []
+      journal: [],
+      meta: { derniereSauvegarde: null, modifs: 0 }
     };
   }
   function normalise(data) {
     var base = etatVide();
     if (!data || typeof data !== 'object') return base;
-    var keys = ['bailleur','biens','lots','locataires','baux','echeances','quittances','etatsDesLieux','numeros','journal'];
+    var keys = ['bailleur','biens','lots','locataires','baux','echeances','quittances','etatsDesLieux','numeros','journal','meta'];
     for (var i = 0; i < keys.length; i++) {
       if (data[keys[i]]) base[keys[i]] = data[keys[i]];
     }
@@ -544,7 +658,54 @@
     if (el) el.innerHTML = '<b>' + esc(libelleStockage()) + '</b>' + (extra ? ' · ' + esc(extra) : '');
   }
 
+  var fichierLie = { handle: null, timer: null };
+
+  function supporteFichierLocal() {
+    return typeof window.showSaveFilePicker === 'function';
+  }
+  function nomSauvegarde() {
+    return 'sauvegarde-gestion-locative-' + todayISO() + '.json';
+  }
+  function ecritFichierLie(annonce) {
+    if (!fichierLie.handle) return;
+    fichierLie.handle.createWritable().then(function (flux) {
+      return flux.write(JSON.stringify(state, null, 2)).then(function () { return flux.close(); });
+    }).then(function () {
+      state.meta.derniereSauvegarde = new Date().toISOString();
+      state.meta.modifs = 0;
+      try { window.localStorage.setItem(store.key, JSON.stringify(state)); } catch (e) { /* quota */ }
+      if (annonce) { toast('Fichier de sauvegarde lié et à jour.'); rendu(); }
+    }).catch(function () {
+      if (annonce) toast('Écriture impossible dans ce fichier.');
+    });
+  }
+  function lieFichierLocal() {
+    if (!supporteFichierLocal()) return;
+    window.showSaveFilePicker({
+      suggestedName: nomSauvegarde(),
+      types: [{ description: 'Sauvegarde', accept: { 'application/json': ['.json'] } }]
+    }).then(function (handle) {
+      fichierLie.handle = handle;
+      ecritFichierLie(true);
+    }).catch(function () { /* annulé */ });
+  }
+  function joursDepuis(iso) {
+    if (!iso) return null;
+    return Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
+  }
+  function sauvegardeAncienne() {
+    if (!state.baux.length && !state.biens.length) return false;
+    var j = joursDepuis(state.meta.derniereSauvegarde);
+    if (j === null) return state.meta.modifs > 12;
+    return j >= 14 || state.meta.modifs > 60;
+  }
+
   function sauvegarde() {
+    state.meta.modifs = (state.meta.modifs || 0) + 1;
+    if (fichierLie.handle) {
+      clearTimeout(fichierLie.timer);
+      fichierLie.timer = setTimeout(function () { ecritFichierLie(false); }, 3000);
+    }
     if (store.mode === 'cloud' && store.docRef) {
       store.pending = JSON.parse(JSON.stringify(state));
       videPending();
@@ -1241,6 +1402,19 @@
 
   /* ------------------------------------------------------------ rendu : UI */
 
+  var ICONES = {
+    bord: '<path d="M3 12h4l3 7 4-16 3 9h4"/>',
+    loyers: '<path d="M3 7h18v12H3z"/><circle cx="12" cy="13" r="2.6"/>',
+    quittances: '<path d="M6 3h9l4 4v14H6z"/><path d="M9 11h7M9 15h7"/>',
+    parc: '<path d="M3 11 12 4l9 7"/><path d="M5 10v10h14V10"/>',
+    locataires: '<circle cx="9" cy="8" r="3"/><path d="M3 20c0-3.3 2.7-5 6-5s6 1.7 6 5"/><path d="M16 5.5a3 3 0 0 1 0 5.8"/>',
+    baux: '<path d="M5 4h11l3 3v13H5z"/><path d="M8 9h8M8 13h8M8 17h4"/>',
+    reglages: '<circle cx="12" cy="12" r="3"/><path d="M12 3v2m0 14v2M3 12h2m14 0h2M5.6 5.6l1.4 1.4m10 10 1.4 1.4m0-12.8-1.4 1.4m-10 10L5.6 18.4"/>'
+  };
+  function icone(id) {
+    return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (ICONES[id] || '') + '</svg>';
+  }
+
   var ONGLETS = [
     { id: 'bord', nom: 'Tableau de bord' },
     { id: 'loyers', nom: 'Loyers' },
@@ -1262,7 +1436,7 @@
   function rendu() {
     var tabs = document.getElementById('tabs');
     tabs.innerHTML = ONGLETS.map(function (o) {
-      return '<button type="button" data-vue="' + o.id + '"' + (o.id === vue ? ' aria-current="page"' : '') + '>' + esc(o.nom) + '</button>';
+      return '<button type="button" data-vue="' + o.id + '"' + (o.id === vue ? ' aria-current="page"' : '') + '>' + icone(o.id) + esc(o.nom) + '</button>';
     }).join('');
     var host = document.getElementById('view');
     if (vue === 'bord') host.innerHTML = vueBord();
@@ -1287,7 +1461,13 @@
     var retardMontant = 0;
     retards.forEach(function (e) { retardMontant += totalDu(e) - totalPaye(e); });
 
-    var h = '<h2 class="view-title">' + esc(monthLabel(mois)) + '</h2>';
+    var h = '';
+    if (sauvegardeAncienne()) {
+      var j = joursDepuis(state.meta.derniereSauvegarde);
+      h += '<div class="banner"><span>' + (j === null ? 'Vos données ne sont enregistrées que dans ce navigateur, sans aucune sauvegarde pour l\'instant.' : 'Dernière sauvegarde il y a ' + j + ' jours.') + '</span>';
+      h += '<span class="push"><button class="btn" type="button" data-action="export-json">Sauvegarder maintenant</button></span></div>';
+    }
+    h += '<h2 class="view-title">' + esc(monthLabel(mois)) + '</h2>';
     h += '<p class="view-intro">Ce qui doit rentrer ce mois-ci, ce qui est arrivé, et ce qui traîne.</p>';
 
     if (!state.baux.length) {
@@ -1593,19 +1773,18 @@
     var ro = fige ? ' disabled' : '';
 
     function selectEtat(ref, valeur) {
-      var h = '<select data-edl="' + ref + '"' + ro + ' style="min-width:110px">';
+      var h = '<select data-edl="' + ref + '"' + ro + '>';
       ETATS.forEach(function (e) {
         h += '<option value="' + esc(e) + '"' + (e === valeur ? ' selected' : '') + '>' + (e === '' ? '—' : esc(e)) + '</option>';
       });
       return h + '</select>';
     }
     function ligneSaisie(ref, l) {
-      var h = '<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:7px 0;border-bottom:1px solid var(--line)">';
-      h += '<span style="min-width:150px;font-size:14px">' + esc(l.nom);
-      if (!entree && l.etatEntree) h += ' <span class="meta" style="color:var(--ink-soft);font-size:12.5px">(entrée : ' + esc(l.etatEntree) + ')</span>';
+      var h = '<div class="edl-ligne"><span class="nom">' + esc(l.nom);
+      if (!entree && l.etatEntree) h += ' <span class="meta">(entrée : ' + esc(l.etatEntree) + ')</span>';
       h += '</span>';
       h += selectEtat(ref + '|etat', l.etat);
-      h += '<input type="text" data-edl="' + ref + '|obs" value="' + esc(l.obs) + '" placeholder="Observations"' + ro + ' style="flex:1;min-width:160px;font:inherit;font-size:14px;padding:9px 10px;border:1px solid var(--line-strong);border-radius:8px;background:var(--surface-2);color:var(--ink)">';
+      h += '<input type="text" data-edl="' + ref + '|obs" value="' + esc(l.obs) + '" placeholder="Observations"' + ro + '>';
       return h + '</div>';
     }
 
@@ -1632,7 +1811,7 @@
 
     edl.pieces.forEach(function (piece, i) {
       h += '<section class="panel"><div style="display:flex;gap:10px;align-items:center;margin-bottom:10px">';
-      h += '<input type="text" data-edl="piece|' + i + '|nom" value="' + esc(piece.nom) + '"' + ro + ' style="font:inherit;font-size:16px;font-weight:600;flex:1;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--surface-2);color:var(--ink)">';
+      h += '<input class="titre-piece" type="text" data-edl="piece|' + i + '|nom" value="' + esc(piece.nom) + '"' + ro + '>';
       if (!fige) h += '<button class="btn quiet" type="button" data-action="edl-suppr-piece" data-index="' + i + '">Retirer</button>';
       h += '</div>';
       piece.lignes.forEach(function (l, j) { h += ligneSaisie('piece|' + i + '|' + j, l); });
@@ -1679,15 +1858,34 @@
     h += champ('set-tel', 'Téléphone (facultatif, figure au bail)', 'tel', b.telephone, '');
     h += '</div><div class="row-actions"><button class="btn" type="button" data-action="save-bailleur">Enregistrer</button></div></section>';
 
-    h += '<section class="panel"><h3>Vos données</h3>';
-    h += '<p class="empty">' + esc(libelleStockage()) + '. Rien n\'est envoyé ailleurs. Gardez une sauvegarde : c\'est un fichier que vous pouvez relire plus tard.</p>';
+    var jours = joursDepuis(state.meta.derniereSauvegarde);
+    h += '<section class="panel"><h3>Sauvegarde sur votre ordinateur</h3>';
+    h += '<p class="empty">' + esc(libelleStockage()) + '. Rien n\'est envoyé ailleurs, donc rien n\'est sauvegardé à votre place : le fichier de sauvegarde est votre seul filet.</p>';
+    h += '<div class="stats" style="margin:16px 0">';
+    h += '<div class="stat ' + (jours === null || jours >= 14 ? 'is-warn' : 'is-accent') + '"><div class="k">Dernière sauvegarde</div><div class="v">' + (jours === null ? 'jamais' : (jours === 0 ? "aujourd'hui" : 'il y a ' + jours + ' j')) + '</div></div>';
+    h += '<div class="stat"><div class="k">Modifications depuis</div><div class="v">' + (state.meta.modifs || 0) + '</div></div>';
+    h += '<div class="stat"><div class="k">Contenu</div><div class="v">' + state.baux.length + ' bail(s)</div></div>';
+    h += '</div>';
     h += '<div class="row-actions">';
-    h += '<button class="btn ghost" type="button" data-action="export-json">Sauvegarder (fichier)</button>';
+    h += '<button class="btn" type="button" data-action="export-json">Sauvegarder maintenant</button>';
     h += '<button class="btn ghost" type="button" data-action="import-json">Restaurer une sauvegarde</button>';
     h += '<button class="btn ghost" type="button" data-action="export-csv">Exporter les encaissements (CSV)</button>';
-    h += '<button class="btn quiet" type="button" data-action="reset">Tout effacer</button>';
     h += '</div>';
-    h += '<p class="hint">Journal : ' + state.journal.length + ' évènement(s) enregistré(s). Les quittances émises ne sont jamais supprimées, seulement annulées.</p>';
+    if (supporteFichierLocal()) {
+      h += '<div class="row-actions">';
+      h += '<button class="btn ghost" type="button" data-action="lier-fichier">' + (fichierLie.handle ? 'Changer le fichier lié' : 'Lier un fichier de sauvegarde') + '</button></div>';
+      h += '<p class="hint">' + (fichierLie.handle
+        ? 'Un fichier est lié : il est réécrit automatiquement quelques secondes après chaque modification. Le lien vaut pour cette session ; à la réouverture de l\'application, reliez-le en un clic.'
+        : 'Votre navigateur sait écrire directement dans un fichier de votre disque : choisissez-en un une fois, il se met à jour tout seul ensuite.') + '</p>';
+    } else {
+      h += '<p class="hint">Votre navigateur (Safari, notamment) ne permet pas l\'écriture automatique dans un fichier du disque. Le bouton ci-dessus télécharge la sauvegarde : rangez-la dans un dossier dédié, ou dans votre iCloud Drive pour qu\'elle suive vos appareils.</p>';
+    }
+    h += '<p class="hint">À faire au moins une fois par mois, et systématiquement avant de nettoyer votre navigateur ou de changer de machine.</p>';
+    h += '</section>';
+
+    h += '<section class="panel"><h3>Journal et effacement</h3>';
+    h += '<p class="empty">' + state.journal.length + ' évènement(s) enregistré(s). Les quittances émises ne sont jamais supprimées, seulement annulées.</p>';
+    h += '<div class="row-actions"><button class="btn quiet" type="button" data-action="reset">Tout effacer</button></div>';
     h += '</section>';
 
     h += '<section class="panel"><h3>Ce que fait cette version</h3>';
@@ -1853,9 +2051,20 @@
       var reader = new FileReader();
       reader.onload = function () {
         try {
-          state = normalise(JSON.parse(String(reader.result)));
-          journalise('restauration', f.name);
-          apresChangement('Sauvegarde restaurée.');
+          var lu = normalise(JSON.parse(String(reader.result)));
+          if (!Array.isArray(lu.baux) || !Array.isArray(lu.biens)) throw new Error('structure');
+          importJson.candidat = lu;
+          var d = '<h3>Restaurer cette sauvegarde ?</h3>';
+          d += '<p class="empty">' + esc(f.name) + '</p>';
+          d += '<div class="stats" style="margin:16px 0">';
+          d += '<div class="stat"><div class="k">Biens</div><div class="v">' + lu.biens.length + '</div></div>';
+          d += '<div class="stat"><div class="k">Baux</div><div class="v">' + lu.baux.length + '</div></div>';
+          d += '<div class="stat"><div class="k">Quittances</div><div class="v">' + lu.quittances.length + '</div></div>';
+          d += '</div>';
+          d += '<p class="empty">Le contenu actuel de cette application sera remplacé. Sauvegardez-le d\'abord si vous n\'êtes pas sûr.</p>';
+          d += '<div class="row-actions"><button class="btn" type="button" data-action="confirmer-restauration">Restaurer</button>';
+          d += '<button class="btn ghost" type="button" data-action="fermer">Annuler</button></div>';
+          ouvreModal(d);
         } catch (e) {
           toast('Ce fichier n\'est pas une sauvegarde lisible.');
         }
@@ -2220,7 +2429,22 @@
       return;
     }
     if (action === 'export-json') {
-      sauveFichier('sauvegarde-gestion-locative.json', JSON.stringify(state, null, 2), 'application/json');
+      state.meta.derniereSauvegarde = new Date().toISOString();
+      state.meta.modifs = 0;
+      try { window.localStorage.setItem(store.key, JSON.stringify(state)); } catch (e) { /* quota */ }
+      sauveFichier(nomSauvegarde(), JSON.stringify(state, null, 2), 'application/json');
+      rendu();
+      return;
+    }
+    if (action === 'lier-fichier') { lieFichierLocal(); return; }
+    if (action === 'confirmer-restauration') {
+      if (!importJson.candidat) return;
+      state = importJson.candidat;
+      importJson.candidat = null;
+      state.meta.modifs = 0;
+      journalise('restauration', 'sauvegarde restaurée');
+      fermeModal();
+      apresChangement('Sauvegarde restaurée.');
       return;
     }
     if (action === 'import-json') { importJson(); return; }

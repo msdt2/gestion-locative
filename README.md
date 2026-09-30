@@ -12,7 +12,8 @@ Aucun serveur, aucun compte, aucune base de données. **Les données restent dan
 - Quittances et reçus partiels en PDF, numérotés en continu, jamais supprimés (annulation tracée)
 - Préparation de l'e-mail au locataire, avec contrôle de son accord pour l'envoi dématérialisé
 - Génération du bail, de la liste des annexes à joindre et des états des lieux d'entrée et de sortie
-- Export CSV des encaissements, sauvegarde et restauration au format JSON
+- États des lieux d'entrée et de sortie remplis directement en ligne, la sortie reprenant les états relevés à l'entrée, puis clôture qui fige le document
+- Export CSV des encaissements, sauvegarde et restauration au format JSON, avec suivi de l'ancienneté de la dernière sauvegarde
 
 Le bail reprend le plan et les mentions du contrat type du décret n° 2015-587 du 29 mai 2015, modifié par le décret n° 2026-596 du 6 juillet 2026 (contrats conclus ou renouvelés à compter du 1er octobre 2026). **À faire relire par un juriste avant tout usage réel.**
 
@@ -35,7 +36,9 @@ L'application est installable (PWA) : ouvrir l'adresse, puis « Ajouter à l'éc
 
 Les données vivent dans le navigateur. Elles disparaissent si l'historique et les données de site sont effacés, ou si le navigateur est réinstallé.
 
-**Réglages → Sauvegarder (fichier)** produit un fichier JSON à conserver ailleurs. **Restaurer une sauvegarde** le relit. À faire au moins une fois par mois, et avant tout nettoyage du navigateur.
+**Réglages → Sauvegarder maintenant** produit un fichier JSON daté, à conserver ailleurs. **Restaurer une sauvegarde** le relit, après un récapitulatif de ce qu'il contient. L'application indique depuis combien de temps vous n'avez pas sauvegardé et affiche un bandeau quand cela devient risqué.
+
+Sur Chrome et Edge, **Lier un fichier de sauvegarde** choisit un fichier de votre disque une fois pour toutes : il est réécrit automatiquement quelques secondes après chaque modification. Safari ne le permet pas ; le téléchargement manuel reste la solution, par exemple vers un dossier iCloud Drive.
 
 Pour retrouver les mêmes données sur plusieurs appareils, il faudra un serveur de synchronisation : c'est l'étape suivante, déjà prévue dans le code (`initStockage`).
 
@@ -44,6 +47,10 @@ Pour retrouver les mêmes données sur plusieurs appareils, il faudra un serveur
 Remplacer `index.html` dans le dépôt. Au rechargement suivant, la nouvelle version est prise en compte (le service worker sert le réseau en premier). Les données déjà saisies ne sont pas touchées.
 
 En cas de changement du format de données, incrémenter `CACHE` dans `sw.js` pour forcer le renouvellement du cache.
+
+## Identité visuelle
+
+Les couleurs, la typographie et les composants sont décrits dans `CHARTE.md` et définis en variables CSS en tête de `index.html`.
 
 ## Développement
 

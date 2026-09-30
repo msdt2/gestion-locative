@@ -454,6 +454,28 @@
         }
         y -= 78;
       },
+      grilleRemplie: function (label, etat, obs, xs, obsX, etatEntree) {
+        place(19);
+        items.push({ t: 'text', x: M, y: y, s: label, size: 9.5 });
+        if (etatEntree) {
+          items.push({ t: 'text', x: M + 118, y: y, s: '(entrée : ' + etatEntree + ')', size: 7.5 });
+        }
+        var index = ['Neuf', 'Bon', 'Usagé', 'Mauvais'].indexOf(etat);
+        for (var i = 0; i < xs.length; i++) {
+          items.push({ t: 'box', x: xs[i], y: y - 1.5, w: 9, h: 9, lw: 0.5 });
+          if (i === index) {
+            items.push({ t: 'line', x1: xs[i] + 1.5, y1: y, x2: xs[i] + 7.5, y2: y + 6, lw: 1 });
+            items.push({ t: 'line', x1: xs[i] + 1.5, y1: y + 6, x2: xs[i] + 7.5, y2: y, lw: 1 });
+          }
+        }
+        if (obs) {
+          var court = pdfWrap(obs, R - obsX, 8, false);
+          items.push({ t: 'text', x: obsX, y: y, s: court[0] + (court.length > 1 ? '…' : ''), size: 8 });
+        } else {
+          items.push({ t: 'line', x1: obsX, y1: y - 2.5, x2: R, y2: y - 2.5, lw: 0.3 });
+        }
+        y -= 17;
+      },
       coche: function (label, note) {
         place(note ? 32 : 22);
         items.push({ t: 'box', x: M, y: y - 1.5, w: 10, h: 10, lw: 0.6 });
@@ -477,13 +499,14 @@
   var state = null;
   var vue = 'bord';
   var bailCourant = null;
+  var edlCourant = null;
   var moisAffiche = currentMonth();
 
   function etatVide() {
     return {
       version: 1,
       bailleur: { nom: '', adresse: '', ville: '', email: '' },
-      biens: [], lots: [], locataires: [], baux: [], echeances: [], quittances: [],
+      biens: [], lots: [], locataires: [], baux: [], echeances: [], quittances: [], etatsDesLieux: [],
       numeros: {},
       journal: []
     };
@@ -491,7 +514,7 @@
   function normalise(data) {
     var base = etatVide();
     if (!data || typeof data !== 'object') return base;
-    var keys = ['bailleur','biens','lots','locataires','baux','echeances','quittances','numeros','journal'];
+    var keys = ['bailleur','biens','lots','locataires','baux','echeances','quittances','etatsDesLieux','numeros','journal'];
     for (var i = 0; i < keys.length; i++) {
       if (data[keys[i]]) base[keys[i]] = data[keys[i]];
     }
@@ -893,6 +916,70 @@
     window.open(url, '_blank');
   }
 
+  /* ----------------------------------------- états des lieux : données */
+
+  var LIGNES_EDL = ['Sols', 'Murs', 'Plafond', 'Fenêtres et volets', 'Portes', 'Électricité et éclairage', 'Chauffage', 'Équipements'];
+  var ETATS = ['', 'Neuf', 'Bon', 'Usagé', 'Mauvais'];
+
+  function edlDuBail(bailId) {
+    return state.etatsDesLieux.filter(function (e) { return e.bailId === bailId; });
+  }
+  function dernierEdl(bailId, sens) {
+    var l = edlDuBail(bailId).filter(function (e) { return e.sens === sens; });
+    return l.length ? l[l.length - 1] : null;
+  }
+  function creeEdl(bail, sens) {
+    var d = detailsDe(bail);
+    var modele = sens === 'sortie' ? dernierEdl(bail.id, 'entree') : null;
+    var pieces;
+    if (modele) {
+      pieces = modele.pieces.map(function (p) {
+        return {
+          nom: p.nom,
+          lignes: p.lignes.map(function (l) {
+            return { nom: l.nom, etat: '', obs: '', etatEntree: l.etat || '' };
+          })
+        };
+      });
+    } else {
+      var noms = String(d.piecesEdl || '').split('\n').map(function (x) { return x.trim(); }).filter(Boolean);
+      if (!noms.length) noms = ['Pièce 1'];
+      pieces = noms.map(function (nom) {
+        return {
+          nom: nom,
+          lignes: LIGNES_EDL.map(function (l) { return { nom: l, etat: '', obs: '', etatEntree: '' }; })
+        };
+      });
+    }
+    var mobilier = [];
+    if (bail.type === 'meuble') {
+      if (modele && modele.mobilier && modele.mobilier.length) {
+        mobilier = modele.mobilier.map(function (m) { return { nom: m.nom, etat: '', obs: '', etatEntree: m.etat || '' }; });
+      } else {
+        var mob = String(d.mobilier || '').split('\n').map(function (x) { return x.trim(); }).filter(Boolean);
+        if (!mob.length) mob = ['Literie', 'Table et sièges', 'Rangements', 'Plaques de cuisson', 'Réfrigérateur', 'Vaisselle et ustensiles', 'Luminaires'];
+        mobilier = mob.map(function (m) { return { nom: m, etat: '', obs: '', etatEntree: '' }; });
+      }
+    }
+    var edl = {
+      id: uid('edl'),
+      bailId: bail.id,
+      sens: sens,
+      date: todayISO(),
+      presents: '',
+      compteurs: { eauFroide: '', eauChaude: '', electricite: '', gaz: '' },
+      cles: '',
+      badges: '',
+      pieces: pieces,
+      mobilier: mobilier,
+      observations: '',
+      clotureLe: null
+    };
+    state.etatsDesLieux.push(edl);
+    journalise('etat des lieux', sens + ' · ' + nomLot(bail.lotId));
+    return edl;
+  }
+
   /* ------------------------------------------- bail, annexes, état des lieux */
 
   function listeAnnexes(bail, d) {
@@ -1102,6 +1189,51 @@
     return f.fin();
   }
 
+  function pagesEdlRempli(edl) {
+    var bail = trouve(state.baux, edl.bailId);
+    var entree = edl.sens === 'entree';
+    var f = Flux();
+    var xs = [243, 293, 343, 393];
+    var obsX = 443;
+
+    f.titre('État des lieux ' + (entree ? "d'entrée" : 'de sortie'));
+    f.texte("Établi contradictoirement entre les parties. Loi du 6 juillet 1989, article 3-2.", { size: 8.5, apres: 2 });
+    f.trait();
+    f.champ('Logement', adresseLot(bail.lotId));
+    f.champ('Bailleur', state.bailleur.nom);
+    f.champ(bail.type === 'colocation' ? 'Colocataires' : 'Locataire', nomsLocataires(bail));
+    f.champ('Date', frDateLong(edl.date));
+    f.champ('Personnes présentes', edl.presents);
+
+    f.section('Compteurs et clés');
+    f.champ('Eau froide', edl.compteurs.eauFroide);
+    f.champ('Eau chaude', edl.compteurs.eauChaude);
+    f.champ('Électricité', edl.compteurs.electricite);
+    f.champ('Gaz', edl.compteurs.gaz);
+    f.champ('Clés remises', edl.cles);
+    f.champ('Badges, télécommandes, boîte aux lettres', edl.badges);
+
+    function bloc(titre, lignes) {
+      f.section(titre);
+      f.enTeteGrille(['Neuf', 'Bon', 'Usagé', 'Mauvais'], xs, obsX);
+      lignes.forEach(function (l) {
+        f.grilleRemplie(l.nom, l.etat, l.obs, xs, obsX, entree ? '' : (l.etatEntree || ''));
+      });
+    }
+    edl.pieces.forEach(function (p) { bloc(p.nom, p.lignes); });
+    if (edl.mobilier && edl.mobilier.length) bloc('Mobilier', edl.mobilier);
+
+    f.section('Observations générales');
+    f.texte(edl.observations || 'Néant.', { size: 9.5 });
+    if (!entree) {
+      f.texte("Les dégradations relevées par rapport à l'état des lieux d'entrée s'apprécient vétusté déduite.", { size: 8.5 });
+    }
+    f.espace(6);
+    f.texte('Fait le ' + frDateLong(edl.date) + ', en autant d\'exemplaires que de parties.', { size: 9.5 });
+    f.signatures(['Le bailleur', bail.type === 'colocation' ? 'Les colocataires' : 'Le locataire']);
+    return f.fin();
+  }
+
   function nomDocument(bail, suffixe) {
     var base = suffixe + '-' + nomLot(bail.lotId);
     return base.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') + '.pdf';
@@ -1140,6 +1272,7 @@
     else if (vue === 'locataires') host.innerHTML = vueLocataires();
     else if (vue === 'baux') host.innerHTML = vueBaux();
     else if (vue === 'documents') host.innerHTML = vueDocuments();
+    else if (vue === 'edl') host.innerHTML = vueEdl();
     else host.innerHTML = vueReglages();
   }
 
@@ -1364,10 +1497,30 @@
     h += '<button class="btn" type="button" data-action="gen" data-quoi="tout">Tout en un seul PDF</button>';
     h += '<button class="btn ghost" type="button" data-action="gen" data-quoi="bail">Bail</button>';
     h += '<button class="btn ghost" type="button" data-action="gen" data-quoi="annexes">Annexes à joindre</button>';
-    h += '<button class="btn ghost" type="button" data-action="gen" data-quoi="entree">État des lieux d\'entrée</button>';
-    h += '<button class="btn ghost" type="button" data-action="gen" data-quoi="sortie">État des lieux de sortie</button>';
+    h += '<button class="btn ghost" type="button" data-action="gen" data-quoi="entree">État des lieux vierge (entrée)</button>';
+    h += '<button class="btn ghost" type="button" data-action="gen" data-quoi="sortie">État des lieux vierge (sortie)</button>';
     h += '</div>';
     h += '<p class="hint">Le bail suit le contrat type applicable aux contrats conclus ou renouvelés depuis le 1er octobre 2026 (décret 2026-596). Faites-le relire par un juriste avant de l\'utiliser avec un locataire.</p></section>';
+
+    h += '<section class="panel"><h3>États des lieux à remplir en ligne</h3>';
+    var listeEdl = edlDuBail(bail.id);
+    if (!listeEdl.length) {
+      h += '<p class="empty">Aucun état des lieux commencé. Celui de sortie reprendra automatiquement les pièces et les états relevés à l\'entrée.</p>';
+    }
+    listeEdl.forEach(function (e) {
+      h += '<div class="list-line"><span class="name">' + (e.sens === 'entree' ? 'Entrée' : 'Sortie') + '</span>';
+      h += '<span class="meta">' + esc(frDate(e.date)) + '</span>';
+      h += '<span class="meta">' + e.pieces.length + ' pièce(s)</span>';
+      h += '<span class="tag ' + (e.clotureLe ? 'ok' : 'part') + '">' + (e.clotureLe ? 'clôturé' : 'en cours') + '</span>';
+      h += '<span class="push">';
+      h += '<button class="btn ghost" type="button" data-action="edl-ouvrir" data-id="' + e.id + '">' + (e.clotureLe ? 'Consulter' : 'Remplir') + '</button>';
+      h += '<button class="btn ghost" type="button" data-action="edl-pdf" data-id="' + e.id + '">PDF</button>';
+      h += '</span></div>';
+    });
+    h += '<div class="row-actions" style="margin-top:12px">';
+    h += '<button class="btn" type="button" data-action="edl-nouveau" data-sens="entree">Nouvel état des lieux d\'entrée</button>';
+    h += '<button class="btn ghost" type="button" data-action="edl-nouveau" data-sens="sortie">Nouvel état des lieux de sortie</button>';
+    h += '</div></section>';
 
     if (coloc) {
       var dispo = state.locataires.filter(function (l) { return l.id !== bail.locataireId; });
@@ -1428,6 +1581,89 @@
     if (meuble) h += zone('det-mobilier', 'Inventaire du mobilier (un élément par ligne)', d.mobilier, 'Literie\nTable et sièges\nRéfrigérateur', 6);
     h += zone('det-particulieres', 'Conditions particulières du bail', d.particulieres, 'Néant', 3);
     h += '</div><div class="row-actions"><button class="btn" type="button" data-action="save-details">Enregistrer</button></div></section>';
+    return h;
+  }
+
+  function vueEdl() {
+    var edl = trouve(state.etatsDesLieux, edlCourant);
+    if (!edl) return '<p class="empty">État des lieux introuvable.</p>';
+    var bail = trouve(state.baux, edl.bailId);
+    var fige = !!edl.clotureLe;
+    var entree = edl.sens === 'entree';
+    var ro = fige ? ' disabled' : '';
+
+    function selectEtat(ref, valeur) {
+      var h = '<select data-edl="' + ref + '"' + ro + ' style="min-width:110px">';
+      ETATS.forEach(function (e) {
+        h += '<option value="' + esc(e) + '"' + (e === valeur ? ' selected' : '') + '>' + (e === '' ? '—' : esc(e)) + '</option>';
+      });
+      return h + '</select>';
+    }
+    function ligneSaisie(ref, l) {
+      var h = '<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:7px 0;border-bottom:1px solid var(--line)">';
+      h += '<span style="min-width:150px;font-size:14px">' + esc(l.nom);
+      if (!entree && l.etatEntree) h += ' <span class="meta" style="color:var(--ink-soft);font-size:12.5px">(entrée : ' + esc(l.etatEntree) + ')</span>';
+      h += '</span>';
+      h += selectEtat(ref + '|etat', l.etat);
+      h += '<input type="text" data-edl="' + ref + '|obs" value="' + esc(l.obs) + '" placeholder="Observations"' + ro + ' style="flex:1;min-width:160px;font:inherit;font-size:14px;padding:9px 10px;border:1px solid var(--line-strong);border-radius:8px;background:var(--surface-2);color:var(--ink)">';
+      return h + '</div>';
+    }
+
+    var h = '<button class="btn quiet" type="button" data-action="go-documents">Retour aux documents</button>';
+    h += '<h2 class="view-title">État des lieux ' + (entree ? "d'entrée" : 'de sortie') + '</h2>';
+    h += '<p class="view-intro">' + esc(nomLot(bail.lotId)) + ' · ' + esc(nomsLocataires(bail)) + '</p>';
+
+    if (fige) {
+      h += '<section class="panel"><p class="empty">Clôturé le ' + esc(frDate(edl.clotureLe)) + '. Le document ne peut plus être modifié, comme un état des lieux signé.</p>';
+      h += '<div class="row-actions"><button class="btn" type="button" data-action="edl-pdf" data-id="' + edl.id + '">Télécharger le PDF</button>';
+      h += '<button class="btn quiet" type="button" data-action="edl-rouvrir" data-id="' + edl.id + '">Rouvrir</button></div></section>';
+    }
+
+    h += '<section class="panel"><h3>Cadre</h3><div class="grid-form">';
+    h += '<label class="field">Date<input type="date" data-edl="champ|date" value="' + esc(edl.date) + '"' + ro + '></label>';
+    h += '<label class="field">Personnes présentes<input type="text" data-edl="champ|presents" value="' + esc(edl.presents) + '" placeholder="Bailleur et locataire"' + ro + '></label>';
+    h += '<label class="field">Eau froide (index)<input type="text" data-edl="compteur|eauFroide" value="' + esc(edl.compteurs.eauFroide) + '"' + ro + '></label>';
+    h += '<label class="field">Eau chaude (index)<input type="text" data-edl="compteur|eauChaude" value="' + esc(edl.compteurs.eauChaude) + '"' + ro + '></label>';
+    h += '<label class="field">Électricité (index)<input type="text" data-edl="compteur|electricite" value="' + esc(edl.compteurs.electricite) + '"' + ro + '></label>';
+    h += '<label class="field">Gaz (index)<input type="text" data-edl="compteur|gaz" value="' + esc(edl.compteurs.gaz) + '"' + ro + '></label>';
+    h += '<label class="field">Clés remises<input type="text" data-edl="champ|cles" value="' + esc(edl.cles) + '" placeholder="2 clés + 1 clé boîte aux lettres"' + ro + '></label>';
+    h += '<label class="field">Badges et télécommandes<input type="text" data-edl="champ|badges" value="' + esc(edl.badges) + '"' + ro + '></label>';
+    h += '</div></section>';
+
+    edl.pieces.forEach(function (piece, i) {
+      h += '<section class="panel"><div style="display:flex;gap:10px;align-items:center;margin-bottom:10px">';
+      h += '<input type="text" data-edl="piece|' + i + '|nom" value="' + esc(piece.nom) + '"' + ro + ' style="font:inherit;font-size:16px;font-weight:600;flex:1;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--surface-2);color:var(--ink)">';
+      if (!fige) h += '<button class="btn quiet" type="button" data-action="edl-suppr-piece" data-index="' + i + '">Retirer</button>';
+      h += '</div>';
+      piece.lignes.forEach(function (l, j) { h += ligneSaisie('piece|' + i + '|' + j, l); });
+      if (!fige) {
+        h += '<div class="row-actions" style="margin-top:10px"><button class="btn quiet" type="button" data-action="edl-ajout-ligne" data-index="' + i + '">Ajouter un élément</button></div>';
+      }
+      h += '</section>';
+    });
+
+    if (edl.mobilier && edl.mobilier.length) {
+      h += '<section class="panel"><h3>Mobilier</h3>';
+      edl.mobilier.forEach(function (l, j) { h += ligneSaisie('mob|' + j, l); });
+      h += '</section>';
+    }
+
+    if (!fige) {
+      h += '<section class="panel"><h3>Ajouter une pièce</h3><div class="grid-form">';
+      h += champ('edl-piece-nom', 'Nom de la pièce', 'text', '', 'Chambre 2');
+      h += '</div><div class="row-actions"><button class="btn ghost" type="button" data-action="edl-ajout-piece">Ajouter</button></div></section>';
+    }
+
+    h += '<section class="panel"><h3>Observations générales</h3><div class="grid-form">';
+    h += '<label class="field" style="grid-column:1/-1"><textarea data-edl="champ|observations" rows="4"' + ro + '>' + esc(edl.observations) + '</textarea></label>';
+    h += '</div>';
+    if (!fige) {
+      h += '<div class="row-actions"><button class="btn" type="button" data-action="edl-pdf" data-id="' + edl.id + '">Télécharger le PDF</button>';
+      h += '<button class="btn ghost" type="button" data-action="edl-cloturer" data-id="' + edl.id + '">Clôturer</button>';
+      h += '<button class="btn quiet" type="button" data-action="edl-supprimer" data-id="' + edl.id + '">Supprimer</button></div>';
+      h += '<p class="hint">La saisie est enregistrée au fur et à mesure. Clôturer fige le document : c\'est ce qui lui donne sa valeur de preuve.</p>';
+    }
+    h += '</section>';
     return h;
   }
 
@@ -1784,6 +2020,95 @@
       livrePdf(nom, buildPdf(pages));
       return;
     }
+    if (action === 'go-documents') { vue = 'documents'; rendu(); window.scrollTo(0, 0); return; }
+    if (action === 'edl-nouveau') {
+      var bn = trouve(state.baux, bailCourant);
+      if (!bn) return;
+      var sens = btn.getAttribute('data-sens');
+      if (sens === 'sortie' && !dernierEdl(bn.id, 'entree')) {
+        toast('Commencez par l\'état des lieux d\'entrée : celui de sortie s\'y compare.');
+        return;
+      }
+      var nouveau = creeEdl(bn, sens);
+      edlCourant = nouveau.id;
+      vue = 'edl';
+      sauvegarde();
+      rendu();
+      window.scrollTo(0, 0);
+      return;
+    }
+    if (action === 'edl-ouvrir') { edlCourant = id; vue = 'edl'; rendu(); window.scrollTo(0, 0); return; }
+    if (action === 'edl-pdf') {
+      var ep = trouve(state.etatsDesLieux, id);
+      if (!ep) return;
+      var bp = trouve(state.baux, ep.bailId);
+      livrePdf(nomDocument(bp, 'etat-des-lieux-' + ep.sens + '-' + ep.date), buildPdf(pagesEdlRempli(ep)));
+      return;
+    }
+    if (action === 'edl-cloturer') {
+      confirme('Clôturer cet état des lieux ? Il ne sera plus modifiable.', function () {
+        var ec = trouve(state.etatsDesLieux, id);
+        if (!ec) return;
+        ec.clotureLe = todayISO();
+        journalise('etat des lieux', 'clôture ' + ec.sens);
+        sauvegarde();
+        rendu();
+        toast('État des lieux clôturé.');
+      });
+      return;
+    }
+    if (action === 'edl-rouvrir') {
+      confirme('Rouvrir ce document ? La réouverture est inscrite au journal.', function () {
+        var er = trouve(state.etatsDesLieux, id);
+        if (!er) return;
+        er.clotureLe = null;
+        journalise('etat des lieux', 'réouverture ' + er.sens);
+        sauvegarde();
+        rendu();
+      });
+      return;
+    }
+    if (action === 'edl-supprimer') {
+      confirme('Supprimer cet état des lieux ?', function () {
+        state.etatsDesLieux = state.etatsDesLieux.filter(function (x) { return x.id !== id; });
+        edlCourant = null;
+        vue = 'documents';
+        journalise('etat des lieux', 'suppression');
+        sauvegarde();
+        rendu();
+      });
+      return;
+    }
+    if (action === 'edl-ajout-piece') {
+      var ea = trouve(state.etatsDesLieux, edlCourant);
+      var nomPiece = val('edl-piece-nom');
+      if (!ea || !nomPiece) { toast('Indiquez le nom de la pièce.'); return; }
+      ea.pieces.push({
+        nom: nomPiece,
+        lignes: LIGNES_EDL.map(function (l) { return { nom: l, etat: '', obs: '', etatEntree: '' }; })
+      });
+      sauvegarde();
+      rendu();
+      return;
+    }
+    if (action === 'edl-suppr-piece') {
+      var es = trouve(state.etatsDesLieux, edlCourant);
+      var ip = parseInt(btn.getAttribute('data-index'), 10);
+      if (!es || isNaN(ip)) return;
+      es.pieces.splice(ip, 1);
+      sauvegarde();
+      rendu();
+      return;
+    }
+    if (action === 'edl-ajout-ligne') {
+      var el2 = trouve(state.etatsDesLieux, edlCourant);
+      var il = parseInt(btn.getAttribute('data-index'), 10);
+      if (!el2 || isNaN(il)) return;
+      el2.pieces[il].lignes.push({ nom: 'Autre élément', etat: '', obs: '', etatEntree: '' });
+      sauvegarde();
+      rendu();
+      return;
+    }
     if (action === 'fin-bail') { modalFinBail(trouve(state.baux, id)); return; }
     if (action === 'save-fin') {
       var bail = trouve(state.baux, id);
@@ -1907,6 +2232,33 @@
       });
       return;
     }
+  });
+
+  document.addEventListener('change', function (ev) {
+    var el = ev.target;
+    if (!el || typeof el.getAttribute !== 'function') return;
+    var ref = el.getAttribute('data-edl');
+    if (!ref || !edlCourant) return;
+    var edl = trouve(state.etatsDesLieux, edlCourant);
+    if (!edl || edl.clotureLe) return;
+    var parts = ref.split('|');
+    if (parts[0] === 'champ') {
+      edl[parts[1]] = el.value;
+    } else if (parts[0] === 'compteur') {
+      edl.compteurs[parts[1]] = el.value;
+    } else if (parts[0] === 'piece') {
+      var piece = edl.pieces[parseInt(parts[1], 10)];
+      if (!piece) return;
+      if (parts[2] === 'nom') piece.nom = el.value;
+      else {
+        var ligne = piece.lignes[parseInt(parts[2], 10)];
+        if (ligne) ligne[parts[3]] = el.value;
+      }
+    } else if (parts[0] === 'mob') {
+      var m = edl.mobilier[parseInt(parts[1], 10)];
+      if (m) m[parts[2]] = el.value;
+    }
+    sauvegarde();
   });
 
   document.getElementById('modal').addEventListener('close', function () {

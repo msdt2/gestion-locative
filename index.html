@@ -27,7 +27,7 @@
     --surface-2: #faf9f5;
     --encre: #16201d;
     --encre-2: #4c5a55;
-    --encre-3: #7a8781;
+    --encre-3: #65726c;
     --trait: #e3e0d8;
     --trait-fort: #cbc7bb;
     --accent: #0e6a57;
@@ -37,6 +37,15 @@
     --alerte-fond: #f7e8e3;
     --attention: #8a5a12;
     --attention-fond: #f8efdd;
+
+    /* boutons secondaires : toujours détachés du panneau */
+    --btn2-fond: #f1efe8;
+    --btn2-trait: #c2beb1;
+    --btn2-encre: #1d2925;
+    --btn2-survol: #e7e4da;
+    --btn-inactif-encre: #8d968f;
+    --btn-inactif-trait: #d8d3c6;
+    --accent-encre: #ffffff;
 
     /* rythme */
     --e1: 4px; --e2: 8px; --e3: 12px; --e4: 20px; --e5: 32px; --e6: 48px;
@@ -52,34 +61,43 @@
     padding-top: env(safe-area-inset-top, 0px);
     padding-bottom: env(safe-area-inset-bottom, 0px);
   }
-  :root:not([data-theme="light"]) {
-    @media (prefers-color-scheme: dark) {
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
       --fond: #121614;
       --surface: #1a201d;
-      --surface-2: #212823;
-      --encre: #e9eeeb;
-      --encre-2: #adb9b4;
-      --encre-3: #8b9792;
-      --trait: #2b332f;
-      --trait-fort: #3d4741;
+      --surface-2: #232b27;
+      --encre: #edf2ef;
+      --encre-2: #b6c2bd;
+      --encre-3: #94a09b;
+      --trait: #2f3833;
+      --trait-fort: #475249;
       --accent: #5fc0a6;
-      --accent-fond: #17302a;
+      --accent-fond: #1b342d;
       --accent-vif: #7fd4bc;
-      --alerte: #e79a8a;
-      --alerte-fond: #33211c;
-      --attention: #d9b168;
-      --attention-fond: #2e2617;
-      --ombre: 0 1px 2px rgba(0, 0, 0, .3);
-      --ombre-haute: 0 10px 30px rgba(0, 0, 0, .5);
+      --accent-encre: #06120f;
+      --alerte: #f0a795;
+      --alerte-fond: #3a241f;
+      --attention: #e2bd75;
+      --attention-fond: #33291a;
+      --btn2-fond: #2b3430;
+      --btn2-trait: #697770;
+      --btn2-encre: #edf2ef;
+      --btn2-survol: #36413c;
+      --btn-inactif-encre: #97a39e;
+      --btn-inactif-trait: #3f4a45;
+      --ombre: 0 1px 2px rgba(0, 0, 0, .35);
+      --ombre-haute: 0 10px 30px rgba(0, 0, 0, .55);
     }
   }
   :root[data-theme="dark"] {
-    --fond: #121614; --surface: #1a201d; --surface-2: #212823;
-    --encre: #e9eeeb; --encre-2: #adb9b4; --encre-3: #8b9792;
-    --trait: #2b332f; --trait-fort: #3d4741;
-    --accent: #5fc0a6; --accent-fond: #17302a; --accent-vif: #7fd4bc;
-    --alerte: #e79a8a; --alerte-fond: #33211c;
-    --attention: #d9b168; --attention-fond: #2e2617;
+    --fond: #121614; --surface: #1a201d; --surface-2: #232b27;
+    --encre: #edf2ef; --encre-2: #b6c2bd; --encre-3: #94a09b;
+    --trait: #2f3833; --trait-fort: #475249;
+    --accent: #5fc0a6; --accent-fond: #1b342d; --accent-vif: #7fd4bc; --accent-encre: #06120f;
+    --alerte: #f0a795; --alerte-fond: #3a241f;
+    --attention: #e2bd75; --attention-fond: #33291a;
+    --btn2-fond: #2b3430; --btn2-trait: #697770; --btn2-encre: #edf2ef; --btn2-survol: #36413c;
+    --btn-inactif-encre: #97a39e; --btn-inactif-trait: #3f4a45;
   }
 
   *, *::before, *::after { box-sizing: border-box; }
@@ -155,24 +173,28 @@
   /* ------------------------------------------------------------- boutons */
   button.btn {
     font: inherit; font-size: 14.5px; font-weight: 600; cursor: pointer;
-    background: var(--accent); color: #fff; border: 1px solid var(--accent);
+    background: var(--accent); color: var(--accent-encre); border: 1px solid var(--accent);
     border-radius: 999px; padding: 10px 18px; min-height: 44px;
     display: inline-flex; align-items: center; justify-content: center; gap: 7px;
     transition: background .12s ease, border-color .12s ease, color .12s ease;
   }
   button.btn:hover { background: var(--accent-vif); border-color: var(--accent-vif); }
-  :root[data-theme="dark"] button.btn { color: #06120f; }
-  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) button.btn { color: #06120f; } }
   button.btn.ghost {
-    background: var(--surface); color: var(--encre); border-color: var(--trait-fort);
+    background: var(--btn2-fond); color: var(--btn2-encre); border-color: var(--btn2-trait);
   }
-  button.btn.ghost:hover { background: var(--surface-2); border-color: var(--encre-3); }
+  button.btn.ghost:hover { background: var(--btn2-survol); border-color: var(--encre-3); }
   button.btn.quiet {
-    background: transparent; color: var(--encre-3); border-color: transparent;
-    padding: 8px 10px; min-height: 40px; font-weight: 500;
+    background: transparent; color: var(--encre-2); border-color: transparent;
+    padding: 8px 12px; min-height: 40px; font-weight: 500; text-decoration: underline;
+    text-decoration-color: var(--trait-fort); text-underline-offset: 3px;
   }
-  button.btn.quiet:hover { background: var(--surface-2); color: var(--encre); }
-  button.btn:disabled { opacity: .4; cursor: not-allowed; background: var(--surface); color: var(--encre-3); border-color: var(--trait); }
+  button.btn.quiet:hover { background: var(--btn2-fond); color: var(--encre); }
+  button.btn:disabled {
+    background: transparent; color: var(--btn-inactif-encre);
+    border-color: var(--btn-inactif-trait); border-style: dashed;
+    cursor: not-allowed; opacity: 1;
+  }
+  button.btn:disabled:hover { background: transparent; border-color: var(--btn-inactif-trait); }
   .row-actions { display: flex; flex-wrap: wrap; gap: var(--e2); margin-top: var(--e3); }
 
   /* ----------------------------------------------------------- formulaires */

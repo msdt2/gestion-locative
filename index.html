@@ -635,6 +635,7 @@
   var vue = 'bord';
   var bailCourant = null;
   var edlCourant = null;
+  var anneeBilan = String(new Date().getFullYear());
   var moisAffiche = currentMonth();
 
   function etatVide() {
@@ -642,15 +643,17 @@
       version: 1,
       bailleur: { nom: '', adresse: '', ville: '', email: '' },
       biens: [], lots: [], locataires: [], baux: [], echeances: [], quittances: [], etatsDesLieux: [],
+      regularisations: [], relances: [], restitutions: [], depenses: [], pieces: [],
       numeros: {},
       journal: [],
-      meta: { derniereSauvegarde: null, modifs: 0 }
+      sync: { url: '', cle: '' },
+      meta: { derniereSauvegarde: null, modifs: 0, versionDistante: 0, majDistante: null, modifsDepuisSync: 0 }
     };
   }
   function normalise(data) {
     var base = etatVide();
     if (!data || typeof data !== 'object') return base;
-    var keys = ['bailleur','biens','lots','locataires','baux','echeances','quittances','etatsDesLieux','numeros','journal','meta'];
+    var keys = ['bailleur','biens','lots','locataires','baux','echeances','quittances','etatsDesLieux','regularisations','relances','restitutions','depenses','pieces','numeros','journal','sync','meta'];
     for (var i = 0; i < keys.length; i++) {
       if (data[keys[i]]) base[keys[i]] = data[keys[i]];
     }
@@ -672,6 +675,7 @@
   };
 
   function libelleStockage() {
+    if (Sync.actif()) return 'Données synchronisées sur votre serveur';
     if (store.mode === 'cloud') return 'Données enregistrées dans votre espace privé';
     return 'Données enregistrées dans ce navigateur';
   }
@@ -679,6 +683,194 @@
     var el = document.getElementById('storage-state');
     if (el) el.innerHTML = '<b>' + esc(libelleStockage()) + '</b>' + (extra ? ' · ' + esc(extra) : '');
   }
+
+  /* ------------------------------------------------- synchronisation serveur */
+
+  var Sync = (function () {
+    var CLE_SESSION = 'registre-session';
+    var minuteur = null;
+    var enCours = false;
+
+    function config() {
+      var c = (state && state.sync) || {};
+      return { url: (c.url || '').replace(/\/+$/, ''), cle: c.cle || '' };
+    }
+    function configuree() {
+      var c = config();
+      return !!(c.url && c.cle);
+    }
+    function session() {
+      try { return JSON.parse(window.localStorage.getItem(CLE_SESSION) || 'null'); } catch (e) { return null; }
+    }
+    function poseSession(s) {
+      try {
+        if (s) window.localStorage.setItem(CLE_SESSION, JSON.stringify(s));
+        else window.localStorage.removeItem(CLE_SESSION);
+      } catch (e) { /* stockage plein */ }
+    }
+    function actif() { return configuree() && !!session(); }
+
+    function appel(chemin, options, sansJeton) {
+      var c = config();
+      var s = session();
+      options = options || {};
+      options.headers = options.headers || {};
+      options.headers.apikey = c.cle;
+      if (!sansJeton && s && s.access_token) options.headers.Authorization = 'Bearer ' + s.access_token;
+      if (options.body && typeof options.body === 'string') options.headers['Content-Type'] = 'application/json';
+      return fetch(c.url + chemin, options).then(function (rep) {
+        if (rep.status === 401 && !sansJeton && s && s.refresh_token) {
+          return rafraichit().then(function () {
+            var s2 = session();
+            options.headers.Authorization = 'Bearer ' + (s2 ? s2.access_token : '');
+            return fetch(c.url + chemin, options);
+          });
+        }
+        return rep;
+      });
+    }
+    function rafraichit() {
+      var s = session();
+      if (!s || !s.refresh_token) return Promise.reject(new Error('session'));
+      return appel('/auth/v1/token?grant_type=refresh_token', {
+        method: 'POST', body: JSON.stringify({ refresh_token: s.refresh_token })
+      }, true).then(function (rep) {
+        if (!rep.ok) { poseSession(null); throw new Error('session expirée'); }
+        return rep.json().then(function (j) {
+          poseSession({ access_token: j.access_token, refresh_token: j.refresh_token, user: j.user ? j.user.id : (s.user || null), email: j.user ? j.user.email : s.email });
+          return j;
+        });
+      });
+    }
+    function connecte(email, motDePasse, creation) {
+      var chemin = creation ? '/auth/v1/signup' : '/auth/v1/token?grant_type=password';
+      return appel(chemin, { method: 'POST', body: JSON.stringify({ email: email, password: motDePasse }) }, true)
+        .then(function (rep) {
+          return rep.json().then(function (j) {
+            if (!rep.ok) throw new Error(j.msg || j.error_description || j.message || 'connexion refusée');
+            if (!j.access_token) throw new Error('compte créé : confirmez l\'adresse reçue par courriel, puis connectez-vous');
+            poseSession({ access_token: j.access_token, refresh_token: j.refresh_token, user: j.user ? j.user.id : null, email: j.user ? j.user.email : email });
+            return j;
+          });
+        });
+    }
+    function deconnecte() {
+      poseSession(null);
+      state.meta.versionDistante = 0;
+      state.meta.majDistante = null;
+    }
+    function lit() {
+      return appel('/rest/v1/registres?select=donnees,version,maj', { method: 'GET' }).then(function (rep) {
+        if (!rep.ok) throw new Error('lecture refusée (' + rep.status + ')');
+        return rep.json().then(function (lignes) { return lignes && lignes.length ? lignes[0] : null; });
+      });
+    }
+    function corpsDonnees() {
+      var copie = JSON.parse(JSON.stringify(state));
+      delete copie.sync;
+      return copie;
+    }
+    function ecrit(versionAttendue) {
+      var s = session();
+      var corps = {
+        user_id: s.user,
+        donnees: corpsDonnees(),
+        version: (versionAttendue || 0) + 1,
+        maj: new Date().toISOString()
+      };
+      var chemin = versionAttendue
+        ? '/rest/v1/registres?user_id=eq.' + s.user + '&version=eq.' + versionAttendue
+        : '/rest/v1/registres';
+      var options = {
+        method: versionAttendue ? 'PATCH' : 'POST',
+        headers: { Prefer: 'return=representation' + (versionAttendue ? '' : ',resolution=merge-duplicates') },
+        body: JSON.stringify(versionAttendue ? { donnees: corps.donnees, version: corps.version, maj: corps.maj } : corps)
+      };
+      return appel(chemin, options).then(function (rep) {
+        if (!rep.ok) throw new Error('écriture refusée (' + rep.status + ')');
+        return rep.json().then(function (lignes) {
+          if (!lignes || !lignes.length) return null; // version dépassée : conflit
+          return lignes[0];
+        });
+      });
+    }
+
+    function synchronise(forcer) {
+      if (!actif() || enCours) return Promise.resolve();
+      enCours = true;
+      majStockage('synchronisation…');
+      return lit().then(function (distant) {
+        var localModifie = (state.meta.modifsDepuisSync || 0) > 0;
+        if (distant && distant.version > (state.meta.versionDistante || 0) && localModifie && !forcer) {
+          enCours = false;
+          proposeConflit(distant);
+          return null;
+        }
+        if (distant && distant.version > (state.meta.versionDistante || 0) && !localModifie) {
+          adopte(distant);
+          enCours = false;
+          majStockage('à jour');
+          rendu();
+          return null;
+        }
+        if (!localModifie && distant) {
+          enCours = false;
+          majStockage('à jour');
+          return null;
+        }
+        return ecrit(distant ? distant.version : 0).then(function (ligne) {
+          enCours = false;
+          if (!ligne) {
+            majStockage('conflit : relancez la synchronisation');
+            return lit().then(proposeConflit);
+          }
+          state.meta.versionDistante = ligne.version;
+          state.meta.majDistante = ligne.maj;
+          state.meta.modifsDepuisSync = 0;
+          try { window.localStorage.setItem(store.key, JSON.stringify(state)); } catch (e) { /* quota */ }
+          majStockage('synchronisé');
+          return ligne;
+        });
+      }).catch(function (err) {
+        enCours = false;
+        majStockage('synchronisation impossible');
+        toast('Synchronisation : ' + (err && err.message ? err.message : 'erreur réseau'));
+      });
+    }
+    function adopte(distant) {
+      var conf = state.sync;
+      state = normalise(distant.donnees);
+      state.sync = conf;
+      state.meta.versionDistante = distant.version;
+      state.meta.majDistante = distant.maj;
+      state.meta.modifsDepuisSync = 0;
+      try { window.localStorage.setItem(store.key, JSON.stringify(state)); } catch (e) { /* quota */ }
+    }
+    function proposeConflit(distant) {
+      if (!distant) return;
+      var h = '<h3>Deux versions différentes</h3>';
+      h += '<p class="empty">Cet appareil a ' + (state.meta.modifsDepuisSync || 0) + ' modification(s) non envoyée(s), et le serveur a été mis à jour ailleurs le ' + esc(frDate(String(distant.maj).slice(0, 10))) + '.</p>';
+      h += '<div class="row-actions" style="margin-top:14px">';
+      h += '<button class="btn" type="button" data-action="sync-garder-serveur">Prendre la version du serveur</button>';
+      h += '<button class="btn ghost" type="button" data-action="sync-garder-local">Envoyer la version de cet appareil</button>';
+      h += '</div><p class="hint">Sauvegardez d\'abord sur votre ordinateur si vous hésitez : la version écartée n\'est pas récupérable.</p>';
+      Sync.conflit = distant;
+      ouvreModal(h);
+    }
+
+    function programme() {
+      if (!actif()) return;
+      clearTimeout(minuteur);
+      minuteur = setTimeout(function () { synchronise(false); }, 4000);
+    }
+
+    return {
+      configuree: configuree, actif: actif, session: session,
+      connecte: connecte, deconnecte: deconnecte,
+      synchronise: synchronise, programme: programme,
+      adopte: adopte, ecrit: ecrit, lit: lit, conflit: null
+    };
+  })();
 
   var fichierLie = { handle: null, timer: null };
 
@@ -724,6 +916,8 @@
 
   function sauvegarde() {
     state.meta.modifs = (state.meta.modifs || 0) + 1;
+    state.meta.modifsDepuisSync = (state.meta.modifsDepuisSync || 0) + 1;
+    Sync.programme();
     if (fichierLie.handle) {
       clearTimeout(fichierLie.timer);
       fichierLie.timer = setTimeout(function () { ecritFichierLie(false); }, 3000);
@@ -1099,6 +1293,315 @@
     window.open(url, '_blank');
   }
 
+  /* --------------------------------------- coffre : fichiers du navigateur */
+
+  var Coffre = (function () {
+    var ouverture = null;
+    function ouvre() {
+      if (ouverture) return ouverture;
+      ouverture = new Promise(function (res, rej) {
+        if (!window.indexedDB) { rej(new Error('indisponible')); return; }
+        var req = window.indexedDB.open('registre-fichiers', 1);
+        req.onupgradeneeded = function () {
+          if (!req.result.objectStoreNames.contains('fichiers')) req.result.createObjectStore('fichiers', { keyPath: 'id' });
+        };
+        req.onsuccess = function () { res(req.result); };
+        req.onerror = function () { rej(req.error); };
+      });
+      return ouverture;
+    }
+    function operation(mode, action) {
+      return ouvre().then(function (db) {
+        return new Promise(function (res, rej) {
+          var t = db.transaction('fichiers', mode);
+          var sortie;
+          action(t.objectStore('fichiers'), function (v) { sortie = v; });
+          t.oncomplete = function () { res(sortie); };
+          t.onerror = function () { rej(t.error); };
+          t.onabort = function () { rej(t.error); };
+        });
+      });
+    }
+    return {
+      disponible: function () { return !!window.indexedDB; },
+      ajoute: function (id, blob) {
+        return operation('readwrite', function (st) { st.put({ id: id, blob: blob }); });
+      },
+      lit: function (id) {
+        return operation('readonly', function (st, retour) {
+          var r = st.get(id);
+          r.onsuccess = function () { retour(r.result ? r.result.blob : null); };
+        });
+      },
+      supprime: function (id) {
+        return operation('readwrite', function (st) { st.delete(id); });
+      }
+    };
+  })();
+
+  function piecesDe(cibleType, cibleId) {
+    return state.pieces.filter(function (p) { return p.cibleType === cibleType && p.cibleId === cibleId; });
+  }
+  function compresse(fichier) {
+    return new Promise(function (res) {
+      if (!/^image\//.test(fichier.type) || !window.createImageBitmap || !document.createElement('canvas').getContext) {
+        res(fichier);
+        return;
+      }
+      window.createImageBitmap(fichier).then(function (img) {
+        var max = 1400;
+        var ratio = Math.min(1, max / Math.max(img.width, img.height));
+        var c = document.createElement('canvas');
+        c.width = Math.round(img.width * ratio);
+        c.height = Math.round(img.height * ratio);
+        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+        c.toBlob(function (blob) { res(blob && blob.size < fichier.size ? blob : fichier); }, 'image/jpeg', 0.7);
+      }).catch(function () { res(fichier); });
+    });
+  }
+  function ajoutePieces(fichiers, cibleType, cibleId, libelle) {
+    var suite = Promise.resolve();
+    Array.prototype.slice.call(fichiers).forEach(function (f) {
+      suite = suite.then(function () {
+        return compresse(f).then(function (blob) {
+          var id = uid('pj');
+          return Coffre.ajoute(id, blob).then(function () {
+            state.pieces.push({
+              id: id, nom: f.name, type: blob.type || f.type, taille: blob.size || f.size,
+              ajouteLe: todayISO(), cibleType: cibleType, cibleId: cibleId, libelle: libelle || ''
+            });
+          });
+        });
+      });
+    });
+    return suite.then(function () {
+      journalise('piece jointe', fichiers.length + ' fichier(s) · ' + cibleType);
+      sauvegarde();
+      rendu();
+      toast(fichiers.length > 1 ? fichiers.length + ' fichiers ajoutés.' : 'Fichier ajouté.');
+    }).catch(function () {
+      toast('Enregistrement du fichier impossible dans ce navigateur.');
+    });
+  }
+  function ouvrePiece(id) {
+    var meta = trouve(state.pieces, id);
+    Coffre.lit(id).then(function (blob) {
+      if (!blob) { toast('Fichier introuvable : il a peut-être été effacé avec les données du navigateur.'); return; }
+      var url = URL.createObjectURL(blob);
+      var onglet = window.open(url, '_blank');
+      if (!onglet) fallbackTelecharge(blob, meta ? meta.nom : 'piece-jointe');
+      setTimeout(function () { URL.revokeObjectURL(url); }, 20000);
+    }).catch(function () { toast('Lecture impossible.'); });
+  }
+  function poids(octets) {
+    if (octets > 1048576) return (octets / 1048576).toFixed(1).replace('.', ',') + ' Mo';
+    return Math.max(1, Math.round(octets / 1024)) + ' ko';
+  }
+  function blocPieces(cibleType, cibleId, titre, aide) {
+    var liste = piecesDe(cibleType, cibleId);
+    var h = '<div style="margin-top:14px"><div style="font-size:13px;font-weight:600;color:var(--encre-2);margin-bottom:6px">' + esc(titre) + '</div>';
+    if (!Coffre.disponible()) {
+      return h + '<p class="hint">Ce navigateur ne permet pas de conserver des fichiers hors ligne.</p></div>';
+    }
+    liste.forEach(function (p) {
+      h += '<div class="list-line"><span>' + esc(p.nom) + '</span>';
+      h += '<span class="meta">' + esc(poids(p.taille)) + ' · ' + esc(frDate(p.ajouteLe)) + (p.libelle ? ' · ' + esc(p.libelle) : '') + '</span>';
+      h += '<span class="push"><button class="btn quiet" type="button" data-action="piece-ouvrir" data-id="' + p.id + '">Ouvrir</button>';
+      h += '<button class="btn quiet" type="button" data-action="piece-suppr" data-id="' + p.id + '">Retirer</button></span></div>';
+    });
+    if (!liste.length) h += '<p class="empty" style="font-size:13.5px">Aucun fichier.</p>';
+    h += '<div class="row-actions"><label class="btn ghost" style="cursor:pointer">Ajouter des fichiers';
+    h += '<input type="file" multiple data-pieces="' + cibleType + '|' + cibleId + '" style="display:none">';
+    h += '</label></div>';
+    if (aide) h += '<p class="hint">' + esc(aide) + '</p>';
+    return h + '</div>';
+  }
+
+  /* ------------------------------------------------- dépenses et résultat */
+
+  var CATEGORIES = [
+    'Travaux et réparations',
+    'Charges de copropriété',
+    'Entretien courant',
+    'Assurance du propriétaire',
+    'Taxe foncière',
+    'Intérêts d\'emprunt',
+    'Assurance emprunteur',
+    'Honoraires et frais de gestion',
+    'Autre'
+  ];
+  // Rubriques de la déclaration 2044, pour le récapitulatif annuel.
+  var RUBRIQUE_2044 = {
+    'Travaux et réparations': 'Dépenses de réparation, d\'entretien et d\'amélioration',
+    'Charges de copropriété': 'Provisions pour charges de copropriété',
+    'Entretien courant': 'Dépenses de réparation, d\'entretien et d\'amélioration',
+    'Assurance du propriétaire': 'Primes d\'assurance',
+    'Taxe foncière': 'Impôts et taxes',
+    'Intérêts d\'emprunt': 'Intérêts d\'emprunt',
+    'Assurance emprunteur': 'Intérêts d\'emprunt',
+    'Honoraires et frais de gestion': 'Frais d\'administration et de gestion',
+    'Autre': 'Autres charges'
+  };
+
+  function depensesAnnee(annee, lotId) {
+    return state.depenses.filter(function (d) {
+      if (d.date.slice(0, 4) !== annee) return false;
+      return lotId ? d.lotId === lotId : true;
+    });
+  }
+  function totalDepenses(liste) {
+    var t = 0;
+    liste.forEach(function (d) { t += d.montant; });
+    return t;
+  }
+  function depensesRecuperables(annee, lotId) {
+    return totalDepenses(depensesAnnee(annee, lotId).filter(function (d) { return d.recuperable; }));
+  }
+  function parCategorie(liste) {
+    var m = {};
+    liste.forEach(function (d) { m[d.categorie] = (m[d.categorie] || 0) + d.montant; });
+    return m;
+  }
+  function parRubrique2044(liste) {
+    var m = {};
+    liste.forEach(function (d) {
+      var r = RUBRIQUE_2044[d.categorie] || 'Autres charges';
+      m[r] = (m[r] || 0) + d.montant;
+    });
+    return m;
+  }
+  function encaisseAnnee(annee) {
+    var t = 0;
+    state.echeances.forEach(function (e) {
+      if (e.mois.slice(0, 4) !== annee) return;
+      t += totalPaye(e);
+    });
+    return t;
+  }
+
+  /* ------------------------------------- révision, charges, impayés, rappels */
+
+  function anniversaire(bail) {
+    var debut = bail.debut;
+    var jour = debut.slice(5);
+    var annee = parseInt(todayISO().slice(0, 4), 10);
+    var candidat = annee + '-' + jour;
+    if (candidat > todayISO()) {
+      var derniere = (bail.revisions || []).length ? bail.revisions[bail.revisions.length - 1].effetLe : null;
+      if (!derniere || derniere < (annee - 1) + '-' + jour) return (annee - 1) + '-' + jour;
+    }
+    return candidat;
+  }
+  function loyerRevise(ancien, indiceRef, indiceNouveau) {
+    if (!indiceRef || !indiceNouveau) return ancien;
+    return Math.round(ancien * (indiceNouveau / indiceRef));
+  }
+  function appliqueRevision(bail, indiceRef, indiceNouveau, effetLe, nouveau) {
+    var ancien = bail.loyer;
+    bail.revisions = bail.revisions || [];
+    bail.revisions.push({
+      effetLe: effetLe, ancienLoyer: ancien, nouveauLoyer: nouveau,
+      indiceRef: indiceRef, indiceNouveau: indiceNouveau, decideLe: todayISO()
+    });
+    bail.loyer = nouveau;
+    var moisEffet = effetLe.slice(0, 7);
+    state.echeances.forEach(function (e) {
+      if (e.bailId !== bail.id) return;
+      if (e.mois < moisEffet) return;
+      if (quittanceDe(e.id) || totalPaye(e) > 0) return;
+      var maj = construitEcheance(bail, e.mois);
+      e.loyer = maj.loyer;
+    });
+    journalise('revision', euros(ancien) + ' vers ' + euros(nouveau) + ' au ' + effetLe);
+  }
+
+  function anneesDuBail(bail) {
+    var annees = {};
+    state.echeances.forEach(function (e) {
+      if (e.bailId === bail.id) annees[e.mois.slice(0, 4)] = true;
+    });
+    return Object.keys(annees).sort();
+  }
+  function provisionsAnnee(bail, annee) {
+    var total = 0;
+    state.echeances.forEach(function (e) {
+      if (e.bailId === bail.id && e.mois.slice(0, 4) === annee) total += e.charges;
+    });
+    return total;
+  }
+  function loyersAnnee(bail, annee) {
+    var du = 0, paye = 0;
+    state.echeances.forEach(function (e) {
+      if (e.bailId !== bail.id || e.mois.slice(0, 4) !== annee) return;
+      du += totalDu(e);
+      paye += totalPaye(e);
+    });
+    return { du: du, paye: paye };
+  }
+  function regularisationDe(bailId, annee) {
+    for (var i = 0; i < state.regularisations.length; i++) {
+      if (state.regularisations[i].bailId === bailId && state.regularisations[i].annee === annee) return state.regularisations[i];
+    }
+    return null;
+  }
+
+  function relancesDe(echeanceId) {
+    return state.relances.filter(function (r) { return r.echeanceId === echeanceId; });
+  }
+  function derniereRelance(echeanceId) {
+    var l = relancesDe(echeanceId);
+    return l.length ? l[l.length - 1] : null;
+  }
+  function prochainPalier(echeanceId) {
+    var l = relancesDe(echeanceId);
+    if (!l.length) return 'amiable';
+    if (l[l.length - 1].palier === 'amiable') return 'mise-en-demeure';
+    return 'mise-en-demeure';
+  }
+
+  function rappelsDuLot(lotId) {
+    var lot = trouve(state.lots, lotId);
+    return (lot && lot.rappels) || [];
+  }
+  function tousLesRappels() {
+    var out = [];
+    state.lots.forEach(function (lot) {
+      (lot.rappels || []).forEach(function (r) {
+        out.push({ lotId: lot.id, rappel: r });
+      });
+    });
+    out.sort(function (a, b) { return a.rappel.date < b.rappel.date ? -1 : 1; });
+    return out;
+  }
+  function joursAvant(iso) {
+    return Math.round((new Date(iso).getTime() - new Date(todayISO()).getTime()) / 86400000);
+  }
+
+  function restitutionDe(bailId) {
+    for (var i = 0; i < state.restitutions.length; i++) {
+      if (state.restitutions[i].bailId === bailId) return state.restitutions[i];
+    }
+    return null;
+  }
+  function creeRestitution(bail) {
+    var r = {
+      id: uid('rest'), bailId: bail.id, remiseCles: bail.fin || todayISO(),
+      conforme: true, retenues: [], emisLe: null
+    };
+    state.restitutions.push(r);
+    return r;
+  }
+  function totalRetenues(r) {
+    var t = 0;
+    (r.retenues || []).forEach(function (x) { t += x.montant; });
+    return t;
+  }
+  function dateLimiteRestitution(r) {
+    var base = new Date(r.remiseCles);
+    base.setMonth(base.getMonth() + (r.conforme ? 1 : 2));
+    return base.getFullYear() + '-' + String(base.getMonth() + 1).padStart(2, '0') + '-' + String(base.getDate()).padStart(2, '0');
+  }
+
   /* ----------------------------------------- états des lieux : données */
 
   var LIGNES_EDL = ['Sols', 'Murs', 'Plafond', 'Fenêtres et volets', 'Portes', 'Électricité et éclairage', 'Chauffage', 'Équipements'];
@@ -1417,6 +1920,141 @@
     return f.fin();
   }
 
+  function enTeteCourrier(f, bail, objet) {
+    var b = state.bailleur;
+    f.texte(b.nom || '', { size: 10.5, bold: true });
+    if (b.adresse) f.texte(b.adresse, { size: 9.5 });
+    if (b.email) f.texte(b.email, { size: 9.5 });
+    f.espace(14);
+    f.texte(nomsLocataires(bail), { size: 10.5, bold: true });
+    f.texte(adresseLot(bail.lotId), { size: 9.5 });
+    f.espace(14);
+    f.texte((b.ville || '') + ', le ' + frDateLong(todayISO()), { size: 10 });
+    f.espace(10);
+    f.texte('Objet : ' + objet, { size: 10.5, bold: true });
+    f.espace(6);
+    f.texte(nomsLocataires(bail).indexOf(',') > -1 ? 'Madame, Monsieur,' : 'Madame, Monsieur,', { size: 10.5 });
+    f.espace(4);
+  }
+  function piedCourrier(f) {
+    f.espace(8);
+    f.texte('Je vous prie d\'agréer, Madame, Monsieur, l\'expression de mes salutations distinguées.', { size: 10.5 });
+    f.espace(26);
+    f.texte((state.bailleur.nom || '') + ', bailleur', { size: 10.5 });
+    return f.fin();
+  }
+
+  function pagesRevision(bail, revision) {
+    var f = Flux();
+    enTeteCourrier(f, bail, 'révision annuelle du loyer');
+    f.texte("Conformément au contrat de location et à l'article 17-1 de la loi du 6 juillet 1989, le loyer est révisé chaque année à la date anniversaire du contrat, en fonction de l'indice de référence des loyers publié par l'INSEE.", { size: 10.5 });
+    f.espace(6);
+    f.champ('Indice de référence du contrat', String(revision.indiceRef).replace('.', ','));
+    f.champ('Nouvel indice applicable', String(revision.indiceNouveau).replace('.', ','));
+    f.champ('Loyer hors charges actuel', euros(revision.ancienLoyer));
+    f.champ('Loyer hors charges révisé', euros(revision.nouveauLoyer));
+    f.champ('Variation', euros(revision.nouveauLoyer - revision.ancienLoyer));
+    f.champ('Date d\'effet', frDateLong(revision.effetLe));
+    f.espace(6);
+    f.texte('Le montant des provisions pour charges reste inchangé, à ' + euros(bail.charges) + ' par mois. À compter de la date d\'effet, le montant total à régler chaque mois s\'élève donc à ' + euros(revision.nouveauLoyer + bail.charges) + '.', { size: 10.5 });
+    f.espace(4);
+    f.texte("Cette révision ne donne pas lieu à rappel sur les mois antérieurs : elle s'applique à partir de la date d'effet indiquée ci-dessus.", { size: 10.5 });
+    return piedCourrier(f);
+  }
+
+  function pagesDecompteCharges(bail, reg) {
+    var f = Flux();
+    enTeteCourrier(f, bail, 'régularisation annuelle des charges ' + reg.annee);
+    f.texte("Conformément à l'article 23 de la loi du 6 juillet 1989, les provisions pour charges que vous avez versées font l'objet d'une régularisation annuelle, au vu des dépenses réellement engagées.", { size: 10.5 });
+    f.espace(8);
+    f.section('Décompte de l\'année ' + reg.annee);
+    f.champ('Provisions versées sur l\'année', euros(reg.provisions));
+    f.champ('Charges réelles vous incombant', euros(reg.reelles));
+    f.trait();
+    var solde = reg.reelles - reg.provisions;
+    f.texte(solde > 0 ? 'Complément à votre charge : ' + euros(solde) : (solde < 0 ? 'Trop-perçu à vous restituer : ' + euros(-solde) : 'Aucun écart : les provisions correspondent aux dépenses réelles.'), { size: 11, bold: true });
+    f.espace(8);
+    if (reg.detail) {
+      f.section('Détail des dépenses');
+      String(reg.detail).split('\n').forEach(function (l) {
+        if (l.trim()) f.texte('- ' + l.trim(), { size: 10, interligne: 2 });
+      });
+      f.espace(6);
+    }
+    f.texte("Le détail des dépenses par nature et le mode de répartition sont tenus à votre disposition pendant six mois à compter de l'envoi de ce décompte, conformément à la loi.", { size: 9.5 });
+    if (solde > 0) {
+      f.texte('Le complément est à régler avec la prochaine échéance de loyer.', { size: 10.5 });
+    } else if (solde < 0) {
+      f.texte('Le trop-perçu sera déduit de votre prochaine échéance de loyer.', { size: 10.5 });
+    }
+    return piedCourrier(f);
+  }
+
+  function pagesRelance(bail, ech, palier) {
+    var f = Flux();
+    var reste = totalDu(ech) - totalPaye(ech);
+    var miseEnDemeure = palier === 'mise-en-demeure';
+    enTeteCourrier(f, bail, miseEnDemeure ? 'mise en demeure de payer' : 'rappel de loyer impayé');
+    if (miseEnDemeure) {
+      f.texte('Malgré un premier rappel, le loyer et les charges de la période indiquée ci-dessous demeurent impayés à ce jour.', { size: 10.5 });
+    } else {
+      f.texte('Sauf erreur de ma part, le loyer et les charges de la période indiquée ci-dessous ne m\'étaient pas parvenus à la date de rédaction de ce courrier.', { size: 10.5 });
+    }
+    f.espace(6);
+    f.champ('Période', frDateLong(ech.debut) + ' au ' + frDateLong(ech.fin));
+    f.champ('Montant dû', euros(totalDu(ech)));
+    f.champ('Montant réglé', euros(totalPaye(ech)));
+    f.champ('Reste à régler', euros(reste));
+    f.espace(8);
+    if (miseEnDemeure) {
+      f.texte('Je vous mets en demeure de régler cette somme sous quinze jours à compter de la réception de ce courrier.', { size: 10.5, bold: true });
+      f.espace(4);
+      f.texte("À défaut, je me réserve le droit de saisir un commissaire de justice afin de faire délivrer un commandement de payer, préalable à la mise en oeuvre de la clause résolutoire du bail, et d'informer le garant ou l'organisme de cautionnement.", { size: 10.5 });
+      f.espace(4);
+      f.texte("Si vous rencontrez des difficultés financières, je vous invite à me contacter sans attendre : un échéancier reste préférable à une procédure. Vous pouvez également vous rapprocher de la CAF, du Fonds de solidarité pour le logement ou d'une ADIL.", { size: 10 });
+      f.espace(4);
+      f.texte('Ce courrier est à adresser par lettre recommandée avec accusé de réception.', { size: 9 });
+    } else {
+      f.texte('Je vous remercie de bien vouloir régulariser cette situation dans les meilleurs délais.', { size: 10.5 });
+      f.espace(4);
+      f.texte("Si le règlement a été effectué entre-temps, merci de considérer ce courrier comme sans objet. En cas de difficulté, contactez-moi : une solution amiable est toujours préférable.", { size: 10.5 });
+    }
+    return piedCourrier(f);
+  }
+
+  function pagesRestitution(bail, rest) {
+    var d = detailsDe(bail);
+    var f = Flux();
+    enTeteCourrier(f, bail, 'restitution du dépôt de garantie');
+    f.texte('À la suite de la remise des clés intervenue le ' + frDateLong(rest.remiseCles) + ', voici le décompte de restitution de votre dépôt de garantie.', { size: 10.5 });
+    f.espace(8);
+    f.champ('Dépôt de garantie versé', euros(d.depot));
+    if ((rest.retenues || []).length) {
+      f.section('Retenues');
+      rest.retenues.forEach(function (r) {
+        f.texte('- ' + r.libelle + ' : ' + euros(r.montant), { size: 10, interligne: 2 });
+      });
+      f.espace(4);
+      f.champ('Total des retenues', euros(totalRetenues(rest)));
+      f.texte('Chaque retenue est justifiée par un devis, une facture ou le constat porté à l\'état des lieux de sortie, vétusté déduite.', { size: 9 });
+    } else {
+      f.texte('Aucune retenue n\'est opérée : l\'état des lieux de sortie est conforme à celui d\'entrée, usure normale mise à part.', { size: 10.5 });
+    }
+    f.espace(6);
+    var solde = d.depot - totalRetenues(rest);
+    f.texte('Somme restituée : ' + euros(Math.max(0, solde)), { size: 11.5, bold: true });
+    if (solde < 0) {
+      f.texte('Le montant des réparations excède le dépôt de garantie : il reste dû ' + euros(-solde) + '.', { size: 10.5, bold: true });
+    }
+    f.espace(8);
+    f.texte('La restitution intervient au plus tard le ' + frDateLong(dateLimiteRestitution(rest)) + ', soit '
+      + (rest.conforme ? 'un mois' : 'deux mois') + ' après la remise des clés, conformément à l\'article 22 de la loi du 6 juillet 1989'
+      + (rest.conforme ? ', l\'état des lieux de sortie étant conforme à celui d\'entrée.' : ', des différences ayant été constatées entre les états des lieux d\'entrée et de sortie.'), { size: 10 });
+    f.espace(4);
+    f.texte('Merci de me communiquer vos coordonnées bancaires et votre nouvelle adresse si ce n\'est pas déjà fait.', { size: 10.5 });
+    return piedCourrier(f);
+  }
+
   function nomDocument(bail, suffixe) {
     var base = suffixe + '-' + nomLot(bail.lotId);
     return base.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') + '.pdf';
@@ -1431,6 +2069,7 @@
     parc: '<path d="M3 11 12 4l9 7"/><path d="M5 10v10h14V10"/>',
     locataires: '<circle cx="9" cy="8" r="3"/><path d="M3 20c0-3.3 2.7-5 6-5s6 1.7 6 5"/><path d="M16 5.5a3 3 0 0 1 0 5.8"/>',
     baux: '<path d="M5 4h11l3 3v13H5z"/><path d="M8 9h8M8 13h8M8 17h4"/>',
+    bilan: '<path d="M4 20V9M10 20V4M16 20v-7M22 20H2"/>',
     reglages: '<circle cx="12" cy="12" r="3"/><path d="M12 3v2m0 14v2M3 12h2m14 0h2M5.6 5.6l1.4 1.4m10 10 1.4 1.4m0-12.8-1.4 1.4m-10 10L5.6 18.4"/>'
   };
   function icone(id) {
@@ -1444,6 +2083,7 @@
     { id: 'parc', nom: 'Parc' },
     { id: 'locataires', nom: 'Locataires' },
     { id: 'baux', nom: 'Baux' },
+    { id: 'bilan', nom: 'Bilan' },
     { id: 'reglages', nom: 'Réglages' }
   ];
 
@@ -1469,6 +2109,7 @@
     else if (vue === 'baux') host.innerHTML = vueBaux();
     else if (vue === 'documents') host.innerHTML = vueDocuments();
     else if (vue === 'edl') host.innerHTML = vueEdl();
+    else if (vue === 'bilan') host.innerHTML = vueBilan();
     else host.innerHTML = vueReglages();
   }
 
@@ -1509,6 +2150,19 @@
 
     h += '<section class="panel"><h3>Loyers du mois</h3>' + tableauEcheances(ech, mois) + '</section>';
 
+    var rappels = tousLesRappels().filter(function (x) { return joursAvant(x.rappel.date) < 60; });
+    if (rappels.length) {
+      h += '<section class="panel"><h3>Échéances à surveiller</h3>';
+      rappels.forEach(function (x) {
+        var j = joursAvant(x.rappel.date);
+        h += '<div class="list-line"><span class="name">' + esc(x.rappel.libelle) + '</span>';
+        h += '<span class="meta">' + esc(nomLot(x.lotId)) + '</span>';
+        h += '<span class="meta">' + esc(frDate(x.rappel.date)) + '</span>';
+        h += '<span class="tag ' + (j < 0 ? 'late' : 'part') + '">' + (j < 0 ? 'dépassé de ' + (-j) + ' j' : 'dans ' + j + ' j') + '</span></div>';
+      });
+      h += '<p class="hint">Diagnostics, entretien de chaudière, ramonage, attestation d\'assurance : ces dates se gèrent lot par lot, dans l\'onglet Parc.</p></section>';
+    }
+
     if (retards.length) {
       h += '<section class="panel"><h3>Impayés des mois précédents</h3>';
       h += tableauEcheances(retards.sort(function (a, b) { return a.mois < b.mois ? -1 : 1; }), null) + '</section>';
@@ -1538,6 +2192,10 @@
         + (st === 'paye' ? 'Payé' : (st === 'partiel' ? 'Partiel' : 'En attente')) + '</span></td>';
       h += '<td class="num"><div class="row-actions" style="justify-content:flex-end">';
       h += '<button class="btn ghost" type="button" data-action="paiement" data-id="' + e.id + '">Pointer</button>';
+      if (st !== 'paye' && e.mois <= currentMonth()) {
+        var rel = derniereRelance(e.id);
+        h += '<button class="btn ghost" type="button" data-action="relance" data-id="' + e.id + '">' + (rel ? 'Relancer' : 'Relance') + '</button>';
+      }
       if (q) {
         h += '<button class="btn ghost" type="button" data-action="pdf" data-id="' + q.id + '">PDF ' + (q.type === 'quittance' ? 'quittance' : 'reçu') + '</button>';
       } else {
@@ -1610,6 +2268,20 @@
         h += '<span class="meta">' + (l.surface ? esc(l.surface) + ' m²' : 'surface non renseignée') + '</span>';
         h += '<span class="meta">' + (bailEnCours ? 'loué à ' + esc(nomLocataire(bailEnCours.locataireId)) : 'vacant') + '</span>';
         h += '<span class="push"><button class="btn quiet" type="button" data-action="del-lot" data-id="' + l.id + '">Supprimer</button></span></div>';
+        (l.rappels || []).forEach(function (r, i) {
+          var j = joursAvant(r.date);
+          h += '<div class="list-line" style="padding-left:14px"><span>' + esc(r.libelle) + '</span>';
+          h += '<span class="meta">' + esc(frDate(r.date)) + '</span>';
+          h += '<span class="tag ' + (j < 0 ? 'late' : (j < 60 ? 'part' : 'ok')) + '">' + (j < 0 ? 'dépassé de ' + (-j) + ' j' : 'dans ' + j + ' j') + '</span>';
+          h += '<span class="push"><button class="btn quiet" type="button" data-action="rappel-fait" data-id="' + l.id + '" data-index="' + i + '">Fait</button>';
+          h += '<button class="btn quiet" type="button" data-action="rappel-suppr" data-id="' + l.id + '" data-index="' + i + '">Retirer</button></span></div>';
+        });
+        h += '<div class="grid-form" style="margin:10px 0 0 14px">';
+        h += champ('rappel-libelle-' + l.id, 'Échéance à surveiller', 'text', '', 'Entretien de la chaudière');
+        h += champ('rappel-date-' + l.id, 'Date', 'date', '', '');
+        h += liste('rappel-cycle-' + l.id, 'Puis tous les', ['1 an', '3 ans', '6 ans', '10 ans', 'une seule fois'], '1 an');
+        h += '</div><div class="row-actions" style="margin-left:14px"><button class="btn quiet" type="button" data-action="add-rappel" data-id="' + l.id + '">Ajouter ce rappel</button></div>';
+        h += blocPieces('lot', l.id, 'Pièces du logement', 'Diagnostics, DPE, attestation d\'assurance, factures de travaux, photos. Ces fichiers restent dans ce navigateur : sauvegardez-les à part depuis les réglages.');
       });
       if (!lots.length) h += '<p class="empty">Aucun lot dans ce bien.</p>';
       h += '<div class="grid-form" style="margin-top:14px">';
@@ -1740,6 +2412,89 @@
       h += '</section>';
     }
 
+    var rev = (bail.revisions || []);
+    var derniereRev = rev.length ? rev[rev.length - 1] : null;
+    h += '<section class="panel"><h3>Révision annuelle du loyer</h3>';
+    h += '<p class="empty">Le loyer se révise à la date anniversaire du bail, selon l\'indice de référence des loyers de l\'INSEE. Relevez les deux indices sur le site de l\'INSEE, l\'application fait le calcul et le courrier.</p>';
+    h += '<div class="stats" style="margin:16px 0">';
+    h += '<div class="stat is-accent"><div class="k">Loyer hors charges</div><div class="v">' + esc(euros(bail.loyer)) + '</div></div>';
+    h += '<div class="stat"><div class="k">Prochaine révision</div><div class="v" style="font-size:20px">' + esc(frDate(anniversaire(bail))) + '</div></div>';
+    h += '<div class="stat"><div class="k">Révisions passées</div><div class="v">' + rev.length + '</div></div>';
+    h += '</div>';
+    if (derniereRev) {
+      h += '<p class="hint">Dernière révision au ' + esc(frDate(derniereRev.effetLe)) + ' : ' + esc(euros(derniereRev.ancienLoyer)) + ' vers ' + esc(euros(derniereRev.nouveauLoyer)) + ' (indices ' + esc(String(derniereRev.indiceRef).replace('.', ',')) + ' puis ' + esc(String(derniereRev.indiceNouveau).replace('.', ',')) + ').</p>';
+    }
+    h += '<div class="grid-form" style="margin-top:12px">';
+    h += champ('rev-ref', 'Indice de référence du contrat', 'text', derniereRev ? String(derniereRev.indiceNouveau).replace('.', ',') : '', '145,47');
+    h += champ('rev-nouveau', 'Nouvel indice', 'text', '', '148,09');
+    h += champ('rev-effet', 'Date d\'effet', 'date', anniversaire(bail), '');
+    h += '</div><div class="row-actions">';
+    h += '<button class="btn" type="button" data-action="appliquer-revision">Calculer et appliquer</button>';
+    if (derniereRev) h += '<button class="btn ghost" type="button" data-action="pdf-revision">Courrier de la dernière révision</button>';
+    h += '</div><p class="hint">Les échéances déjà quittancées ou payées ne sont jamais recalculées. Seuls les mois à venir suivent le nouveau loyer.</p></section>';
+
+    var annees = anneesDuBail(bail);
+    h += '<section class="panel"><h3>Régularisation des charges</h3>';
+    h += '<p class="empty">Une fois par an, vous comparez les provisions encaissées aux dépenses réelles, et vous éditez le décompte à remettre au locataire.</p>';
+    if (annees.length) {
+      h += '<div class="scroll-x" style="margin-top:14px"><table class="ledger"><thead><tr><th>Année</th><th class="num">Provisions</th><th class="num">Charges réelles</th><th class="num">Solde</th><th></th></tr></thead><tbody>';
+      annees.forEach(function (a) {
+        var reg = regularisationDe(bail.id, a);
+        var prov = provisionsAnnee(bail, a);
+        h += '<tr><td>' + esc(a) + '</td><td class="num">' + esc(euros(prov)) + '</td>';
+        h += '<td class="num">' + (reg ? esc(euros(reg.reelles)) : '<span class="meta">non saisi</span>') + '</td>';
+        h += '<td class="num">' + (reg ? esc(euros(reg.reelles - reg.provisions)) : '—') + '</td>';
+        h += '<td class="num">' + (reg ? '<button class="btn ghost" type="button" data-action="pdf-regul" data-annee="' + a + '">Décompte</button>' : '') + '</td></tr>';
+      });
+      h += '</tbody></table></div>';
+    }
+    h += '<div class="grid-form" style="margin-top:14px">';
+    h += liste('reg-annee', 'Année à régulariser', annees.length ? annees : [String(new Date().getFullYear() - 1)], annees.length ? annees[annees.length - 1] : '');
+    h += champ('reg-reelles', 'Charges réelles de l\'année (€)', 'text', '', '480');
+    h += zone('reg-detail', 'Détail des dépenses (une par ligne)', '', 'Eau froide : 180 €\nEntretien des parties communes : 220 €\nTaxe d\'enlèvement des ordures ménagères : 80 €', 3);
+    h += '</div><div class="row-actions"><button class="btn" type="button" data-action="enregistrer-regul">Enregistrer la régularisation</button>';
+    h += '<button class="btn ghost" type="button" data-action="regul-depuis-depenses">Reprendre les dépenses récupérables</button></div>';
+    h += '<p class="hint">Le second bouton reprend, pour l\'année choisie, les dépenses que vous avez marquées récupérables dans l\'onglet Bilan.</p></section>';
+
+    if (bail.fin) {
+      var rest = restitutionDe(bail.id);
+      var dep = detailsDe(bail).depot;
+      h += '<section class="panel"><h3>Fin de bail et dépôt de garantie</h3>';
+      if (!rest) {
+        h += '<p class="empty">Le bail prend fin le ' + esc(frDate(bail.fin)) + '. Préparez le décompte de restitution à partir de l\'état des lieux de sortie.</p>';
+        h += '<div class="row-actions"><button class="btn" type="button" data-action="rest-creer">Préparer la restitution</button></div>';
+      } else {
+        var solde = dep - totalRetenues(rest);
+        h += '<div class="grid-form">';
+        h += champ('rest-date', 'Remise des clés', 'date', rest.remiseCles, '');
+        h += coche('rest-conforme', 'L\'état des lieux de sortie est conforme à celui d\'entrée (délai de restitution d\'un mois au lieu de deux).', rest.conforme);
+        h += '</div>';
+        h += '<div class="stats" style="margin:16px 0">';
+        h += '<div class="stat"><div class="k">Dépôt versé</div><div class="v">' + esc(euros(dep)) + '</div></div>';
+        h += '<div class="stat"><div class="k">Retenues</div><div class="v">' + esc(euros(totalRetenues(rest))) + '</div></div>';
+        h += '<div class="stat ' + (solde < 0 ? 'is-warn' : 'is-accent') + '"><div class="k">À restituer</div><div class="v">' + esc(euros(Math.max(0, solde))) + '</div></div>';
+        h += '<div class="stat is-warn"><div class="k">Avant le</div><div class="v" style="font-size:20px">' + esc(frDate(dateLimiteRestitution(rest))) + '</div></div>';
+        h += '</div>';
+        (rest.retenues || []).forEach(function (r, i) {
+          h += '<div class="list-line"><span class="name">' + esc(r.libelle) + '</span><span class="push"><b>' + esc(euros(r.montant)) + '</b> ';
+          h += '<button class="btn quiet" type="button" data-action="rest-suppr-retenue" data-index="' + i + '">Retirer</button></span></div>';
+        });
+        h += '<div class="grid-form" style="margin-top:12px">';
+        h += champ('ret-libelle', 'Retenue : nature', 'text', '', 'Remise en état du mur du séjour');
+        h += champ('ret-montant', 'Montant (€)', 'text', '', '120');
+        h += '</div><div class="row-actions">';
+        h += '<button class="btn ghost" type="button" data-action="rest-ajout-retenue">Ajouter la retenue</button>';
+        h += '<button class="btn" type="button" data-action="pdf-restitution">Courrier de restitution</button>';
+        h += '</div><p class="hint">Chaque retenue doit être justifiée par un devis, une facture ou le constat de l\'état des lieux de sortie, vétusté déduite.</p>';
+      }
+      h += '</section>';
+    }
+
+    h += '<section class="panel"><h3>Pièces du dossier</h3>';
+    h += '<p class="empty">Bail signé, annexes, attestation d\'assurance du locataire, justificatifs : tout ce qui se rattache à ce bail.</p>';
+    h += blocPieces('bail', bail.id, 'Fichiers rattachés au bail', '');
+    h += '</section>';
+
     h += '<section class="panel"><h3>Le logement</h3><div class="grid-form">';
     h += champ('det-surface', 'Surface habitable (m2)', 'text', d.surface, '37');
     h += champ('det-nbPieces', 'Pièces principales', 'text', d.nbPieces, '2');
@@ -1837,6 +2592,7 @@
       if (!fige) h += '<button class="btn quiet" type="button" data-action="edl-suppr-piece" data-index="' + i + '">Retirer</button>';
       h += '</div>';
       piece.lignes.forEach(function (l, j) { h += ligneSaisie('piece|' + i + '|' + j, l); });
+      h += blocPieces('edl', edl.id + ':' + i, 'Photos de la pièce', '');
       if (!fige) {
         h += '<div class="row-actions" style="margin-top:10px"><button class="btn quiet" type="button" data-action="edl-ajout-ligne" data-index="' + i + '">Ajouter un élément</button></div>';
       }
@@ -1868,6 +2624,106 @@
     return h;
   }
 
+  function vueBilan() {
+    var annees = {};
+    state.echeances.forEach(function (e) { annees[e.mois.slice(0, 4)] = true; });
+    var listeAnnees = Object.keys(annees).sort();
+    if (!listeAnnees.length) {
+      return '<h2 class="view-title">Bilan</h2><section class="panel"><p class="empty">Aucune échéance enregistrée : le bilan se remplit à mesure que les loyers sont appelés.</p></section>';
+    }
+    if (listeAnnees.indexOf(anneeBilan) === -1) anneeBilan = listeAnnees[listeAnnees.length - 1];
+
+    var h = '<h2 class="view-title">Bilan ' + esc(anneeBilan) + '</h2>';
+    h += '<p class="view-intro">Ce que chaque lot a rapporté sur l\'année, et ce qui reste à encaisser. De quoi préparer la déclaration de revenus fonciers ou le bilan de la SCI.</p>';
+    h += '<div class="month-nav">';
+    listeAnnees.forEach(function (a) {
+      h += '<button class="btn ' + (a === anneeBilan ? '' : 'ghost') + '" type="button" data-action="annee-bilan" data-annee="' + a + '">' + a + '</button>';
+    });
+    h += '</div>';
+
+    var totalDuA = 0, totalPayeA = 0, totalRegul = 0;
+    var lignes = '';
+    state.baux.forEach(function (b) {
+      var r = loyersAnnee(b, anneeBilan);
+      if (!r.du) return;
+      var reg = regularisationDe(b.id, anneeBilan);
+      var solde = reg ? reg.reelles - reg.provisions : 0;
+      totalDuA += r.du; totalPayeA += r.paye; totalRegul += solde;
+      lignes += '<tr><td>' + esc(nomLot(b.lotId)) + '<br><span class="meta" style="font-size:12.5px">' + esc(nomsLocataires(b)) + '</span></td>';
+      lignes += '<td class="num">' + esc(euros(r.du)) + '</td>';
+      lignes += '<td class="num">' + esc(euros(r.paye)) + '</td>';
+      lignes += '<td class="num">' + (r.du - r.paye > 0 ? '<span class="tag late">' + esc(euros(r.du - r.paye)) + '</span>' : '—') + '</td>';
+      lignes += '<td class="num">' + (reg ? esc(euros(solde)) : '<span class="meta">—</span>') + '</td></tr>';
+    });
+
+    var depA = depensesAnnee(anneeBilan, null);
+    var sortiesA = totalDepenses(depA);
+    var resultatA = totalPayeA - sortiesA;
+
+    h += '<section class="panel"><div class="stats">';
+    h += '<div class="stat is-accent"><div class="k">Encaissé</div><div class="v">' + esc(euros(totalPayeA)) + '</div></div>';
+    h += '<div class="stat"><div class="k">Dépenses</div><div class="v">' + esc(euros(sortiesA)) + '</div></div>';
+    h += '<div class="stat ' + (resultatA < 0 ? 'is-warn' : 'is-accent') + '"><div class="k">Résultat</div><div class="v">' + esc(euros(resultatA)) + '</div></div>';
+    h += '<div class="stat ' + (totalDuA - totalPayeA > 0 ? 'is-warn' : '') + '"><div class="k">Reste dû</div><div class="v">' + esc(euros(totalDuA - totalPayeA)) + '</div></div>';
+    h += '</div>';
+    h += '<p class="hint">Appelé sur l\'année : ' + esc(euros(totalDuA)) + ', soit un taux d\'encaissement de ' + (totalDuA ? Math.round(totalPayeA / totalDuA * 100) : 0) + ' %. Le résultat est une trésorerie, pas un résultat comptable : il ne tient compte ni des amortissements, ni du remboursement du capital emprunté.</p>';
+    h += '</section>';
+
+    h += '<section class="panel"><h3>Par logement</h3><div class="scroll-x"><table class="ledger"><thead><tr>';
+    h += '<th>Logement</th><th class="num">Appelé</th><th class="num">Encaissé</th><th class="num">Impayé</th><th class="num">Régularisation</th>';
+    h += '</tr></thead><tbody>' + (lignes || '<tr><td colspan="5" class="empty">Aucun loyer sur cette année.</td></tr>') + '</tbody></table></div>';
+    h += '<div class="row-actions"><button class="btn ghost" type="button" data-action="export-bilan">Exporter cette année (CSV)</button></div>';
+    h += '<p class="hint">Les régularisations de charges comptent pour leur solde : positif, c\'est un complément appelé au locataire ; négatif, un trop-perçu à rembourser.</p>';
+    h += '</section>';
+
+    h += '<section class="panel"><h3>Dépenses ' + esc(anneeBilan) + '</h3>';
+    if (!depA.length) {
+      h += '<p class="empty">Aucune dépense saisie pour cette année. Travaux, taxe foncière, assurance, intérêts d\'emprunt : c\'est ce qui transforme un suivi de loyers en vrai résultat.</p>';
+    } else {
+      h += '<div class="scroll-x"><table class="ledger"><thead><tr><th>Date</th><th>Nature</th><th>Logement</th><th>Catégorie</th><th class="num">Montant</th><th></th></tr></thead><tbody>';
+      depA.slice().sort(function (a, b) { return a.date < b.date ? 1 : -1; }).forEach(function (d) {
+        h += '<tr><td>' + esc(frDate(d.date)) + '</td>';
+        h += '<td>' + esc(d.libelle) + (d.fournisseur ? '<br><span class="meta" style="font-size:12.5px">' + esc(d.fournisseur) + '</span>' : '') + '</td>';
+        h += '<td>' + (d.lotId ? esc(nomLot(d.lotId)) : '<span class="meta">tous</span>') + '</td>';
+        h += '<td>' + esc(d.categorie) + (d.recuperable ? ' <span class="tag part">récupérable</span>' : '') + '</td>';
+        h += '<td class="num">' + esc(euros(d.montant)) + '</td>';
+        h += '<td class="num"><button class="btn quiet" type="button" data-action="del-depense" data-id="' + d.id + '">Retirer</button></td></tr>';
+      });
+      h += '</tbody></table></div>';
+      var cats = parCategorie(depA);
+      h += '<div class="row-actions" style="margin-top:14px">';
+      Object.keys(cats).forEach(function (c) {
+        h += '<span class="tag part">' + esc(c) + ' : ' + esc(euros(cats[c])) + '</span>';
+      });
+      h += '</div>';
+    }
+    h += '<div class="grid-form" style="margin-top:16px">';
+    h += champ('dep-date', 'Date', 'date', todayISO(), '');
+    h += champ('dep-libelle', 'Nature de la dépense', 'text', '', 'Remplacement du ballon d\'eau chaude');
+    h += champ('dep-montant', 'Montant TTC (€)', 'text', '', '740');
+    h += liste('dep-categorie', 'Catégorie', CATEGORIES, 'Travaux et réparations');
+    var optionsLots = ['Tous les logements'].concat(state.lots.map(function (l) { return nomLot(l.id); }));
+    h += liste('dep-lot', 'Logement concerné', optionsLots, optionsLots[0]);
+    h += champ('dep-fournisseur', 'Fournisseur', 'text', '', 'Plomberie Dubois');
+    h += coche('dep-recuperable', 'Dépense récupérable sur le locataire (elle entrera dans la régularisation des charges).', false);
+    h += '</div><div class="row-actions"><button class="btn" type="button" data-action="add-depense">Enregistrer la dépense</button>';
+    h += '<button class="btn ghost" type="button" data-action="export-depenses">Exporter les dépenses (CSV)</button></div></section>';
+
+    if (depA.length) {
+      var rub = parRubrique2044(depA);
+      h += '<section class="panel"><h3>Pour votre déclaration</h3>';
+      h += '<div class="scroll-x"><table class="ledger"><thead><tr><th>Rubrique</th><th class="num">Montant</th></tr></thead><tbody>';
+      h += '<tr><td>Recettes encaissées (loyers et charges)</td><td class="num">' + esc(euros(totalPayeA)) + '</td></tr>';
+      Object.keys(rub).sort().forEach(function (r) {
+        h += '<tr><td>' + esc(r) + '</td><td class="num">' + esc(euros(rub[r])) + '</td></tr>';
+      });
+      h += '</tbody></table></div>';
+      h += '<p class="hint">Regroupement indicatif, calqué sur les rubriques de la 2044. Il ne remplace ni votre comptable ni les règles propres à votre régime : au réel, seules certaines dépenses sont déductibles et les travaux d\'agrandissement ne le sont pas ; à l\'impôt sur les sociétés, la logique est tout autre, avec amortissement du bien. Les provisions pour charges récupérées auprès du locataire doivent être déclarées en recettes.</p>';
+      h += '</section>';
+    }
+    return h;
+  }
+
   function vueReglages() {
     var b = state.bailleur;
     var h = '<h2 class="view-title">Réglages</h2>';
@@ -1893,6 +2749,10 @@
     h += '<button class="btn ghost" type="button" data-action="import-json">Restaurer une sauvegarde</button>';
     h += '<button class="btn ghost" type="button" data-action="export-csv">Exporter les encaissements (CSV)</button>';
     h += '</div>';
+    if (state.pieces.length) {
+      h += '<div class="row-actions"><button class="btn ghost" type="button" data-action="export-pieces">Sauvegarder les ' + state.pieces.length + ' pièce(s) jointe(s)</button></div>';
+      h += '<p class="hint">Les fichiers joints ne tiennent pas dans la sauvegarde principale : ils ont leur propre fichier, à conserver à côté. La restauration reconnaît automatiquement lequel des deux vous ouvrez.</p>';
+    }
     if (supporteFichierLocal()) {
       h += '<div class="row-actions">';
       h += '<button class="btn ghost" type="button" data-action="lier-fichier">' + (fichierLie.handle ? 'Changer le fichier lié' : 'Lier un fichier de sauvegarde') + '</button></div>';
@@ -1903,6 +2763,36 @@
       h += '<p class="hint">Votre navigateur (Safari, notamment) ne permet pas l\'écriture automatique dans un fichier du disque. Le bouton ci-dessus télécharge la sauvegarde : rangez-la dans un dossier dédié, ou dans votre iCloud Drive pour qu\'elle suive vos appareils.</p>';
     }
     h += '<p class="hint">À faire au moins une fois par mois, et systématiquement avant de nettoyer votre navigateur ou de changer de machine.</p>';
+    h += '</section>';
+
+    var sess = Sync.session();
+    h += '<section class="panel"><h3>Synchronisation entre appareils</h3>';
+    if (!Sync.configuree()) {
+      h += '<p class="empty">Sans serveur, les données vivent uniquement dans ce navigateur. Reliez un projet (Supabase ou PocketBase) pour retrouver votre parc sur le téléphone et l\'ordinateur, et pour ne plus dépendre du cache du navigateur. La marche à suivre est dans INFRASTRUCTURE.md.</p>';
+    }
+    h += '<div class="grid-form" style="margin-top:12px">';
+    h += champ('sync-url', 'Adresse du projet', 'text', (state.sync && state.sync.url) || '', 'https://xxxx.supabase.co');
+    h += champ('sync-cle', 'Clé publique (anon)', 'text', (state.sync && state.sync.cle) || '', 'eyJhbGciOi…');
+    h += '</div><div class="row-actions"><button class="btn ghost" type="button" data-action="sync-config">Enregistrer l\'adresse</button></div>';
+    if (Sync.configuree()) {
+      if (!sess) {
+        h += '<div class="grid-form" style="margin-top:14px">';
+        h += champ('sync-email', 'Adresse électronique', 'email', '', '');
+        h += champ('sync-mdp', 'Mot de passe', 'password', '', '');
+        h += '</div><div class="row-actions">';
+        h += '<button class="btn" type="button" data-action="sync-connexion">Se connecter</button>';
+        h += '<button class="btn ghost" type="button" data-action="sync-creation">Créer le compte</button></div>';
+      } else {
+        h += '<div class="stats" style="margin:16px 0">';
+        h += '<div class="stat is-accent"><div class="k">Compte</div><div class="v" style="font-size:18px">' + esc(sess.email || 'connecté') + '</div></div>';
+        h += '<div class="stat"><div class="k">Version serveur</div><div class="v">' + (state.meta.versionDistante || 0) + '</div></div>';
+        h += '<div class="stat ' + ((state.meta.modifsDepuisSync || 0) > 0 ? 'is-warn' : '') + '"><div class="k">À envoyer</div><div class="v">' + (state.meta.modifsDepuisSync || 0) + '</div></div>';
+        h += '</div>';
+        h += '<div class="row-actions"><button class="btn" type="button" data-action="sync-maintenant">Synchroniser maintenant</button>';
+        h += '<button class="btn quiet" type="button" data-action="sync-deconnexion">Se déconnecter</button></div>';
+        h += '<p class="hint">La synchronisation part toute seule quelques secondes après chaque modification. Les pièces jointes restent locales pour l\'instant : sauvegardez-les à part.</p>';
+      }
+    }
     h += '</section>';
 
     h += '<section class="panel"><h3>Journal et effacement</h3>';
@@ -2073,7 +2963,28 @@
       var reader = new FileReader();
       reader.onload = function () {
         try {
-          var lu = normalise(JSON.parse(String(reader.result)));
+          var brut = JSON.parse(String(reader.result));
+          if (brut && brut.type === 'pieces-jointes' && Array.isArray(brut.fichiers)) {
+            var remises = 0;
+            var suite = Promise.resolve();
+            brut.fichiers.forEach(function (entree) {
+              suite = suite.then(function () {
+                var binaire = atob(entree.data);
+                var tampon = new Uint8Array(binaire.length);
+                for (var k = 0; k < binaire.length; k++) tampon[k] = binaire.charCodeAt(k);
+                return Coffre.ajoute(entree.meta.id, new Blob([tampon], { type: entree.meta.type })).then(function () {
+                  if (!trouve(state.pieces, entree.meta.id)) state.pieces.push(entree.meta);
+                  remises++;
+                });
+              });
+            });
+            suite.then(function () {
+              journalise('piece jointe', 'restauration de ' + remises + ' fichier(s)');
+              apresChangement(remises + ' pièce(s) jointe(s) restaurée(s).');
+            }).catch(function () { toast('Restauration des fichiers impossible.'); });
+            return;
+          }
+          var lu = normalise(brut);
           if (!Array.isArray(lu.baux) || !Array.isArray(lu.biens)) throw new Error('structure');
           importJson.candidat = lu;
           var d = '<h3>Restaurer cette sauvegarde ?</h3>';
@@ -2340,6 +3251,298 @@
       rendu();
       return;
     }
+    if (action === 'piece-ouvrir') { ouvrePiece(id); return; }
+    if (action === 'piece-suppr') {
+      confirme('Retirer ce fichier ?', function () {
+        Coffre.supprime(id).catch(function () { /* déjà absent */ }).then(function () {
+          state.pieces = state.pieces.filter(function (p) { return p.id !== id; });
+          journalise('piece jointe', 'suppression');
+          apresChangement('Fichier retiré.');
+        });
+      });
+      return;
+    }
+    if (action === 'export-pieces') {
+      if (!state.pieces.length) return;
+      toast('Préparation des fichiers…');
+      var sortie = { type: 'pieces-jointes', version: 1, date: new Date().toISOString(), fichiers: [] };
+      var chaine = Promise.resolve();
+      state.pieces.forEach(function (meta) {
+        chaine = chaine.then(function () {
+          return Coffre.lit(meta.id).then(function (blob) {
+            if (!blob) return null;
+            return new Promise(function (res) {
+              try {
+                var lecteur = new FileReader();
+                lecteur.onload = function () {
+                  sortie.fichiers.push({ meta: meta, data: String(lecteur.result).split(',')[1] });
+                  res();
+                };
+                lecteur.onerror = function () { res(); };
+                lecteur.readAsDataURL(blob);
+              } catch (e) {
+                res();
+              }
+            });
+          }).catch(function () { return null; });
+        });
+      });
+      chaine.then(function () {
+        sauveFichier('pieces-jointes-' + todayISO() + '.json', JSON.stringify(sortie), 'application/json');
+        var manquants = state.pieces.length - sortie.fichiers.length;
+        if (manquants > 0) toast(manquants + ' fichier(s) illisible(s), le reste est sauvegardé.');
+      }).catch(function () { toast('Export des fichiers impossible.'); });
+      return;
+    }
+    if (action === 'annee-bilan') { anneeBilan = btn.getAttribute('data-annee'); rendu(); return; }
+    if (action === 'add-depense') {
+      var lib = val('dep-libelle');
+      var mnt = centsFromInput(val('dep-montant'));
+      var dateD = val('dep-date');
+      if (!lib || mnt <= 0 || !dateD) { toast('Indiquez la date, la nature et le montant.'); return; }
+      var nomLotChoisi = val('dep-lot');
+      var lotTrouve = null;
+      state.lots.forEach(function (l) { if (nomLot(l.id) === nomLotChoisi) lotTrouve = l.id; });
+      state.depenses.push({
+        id: uid('dep'), date: dateD, libelle: lib, montant: mnt,
+        categorie: val('dep-categorie') || 'Autre', lotId: lotTrouve,
+        fournisseur: val('dep-fournisseur'), recuperable: coché('dep-recuperable')
+      });
+      journalise('depense', lib + ' · ' + euros(mnt));
+      anneeBilan = dateD.slice(0, 4);
+      apresChangement('Dépense enregistrée.');
+      return;
+    }
+    if (action === 'del-depense') {
+      confirme('Retirer cette dépense ?', function () {
+        state.depenses = state.depenses.filter(function (d) { return d.id !== id; });
+        apresChangement('Dépense retirée.');
+      });
+      return;
+    }
+    if (action === 'export-depenses') {
+      var ld = [['date', 'nature', 'logement', 'categorie', 'rubrique_2044', 'fournisseur', 'recuperable', 'montant_euros']];
+      depensesAnnee(anneeBilan, null).slice().sort(function (a, b) { return a.date < b.date ? -1 : 1; }).forEach(function (d) {
+        ld.push([d.date, d.libelle, d.lotId ? nomLot(d.lotId) : 'tous', d.categorie,
+          RUBRIQUE_2044[d.categorie] || 'Autres charges', d.fournisseur || '',
+          d.recuperable ? 'oui' : 'non', (d.montant / 100).toFixed(2)]);
+      });
+      sauveFichier('depenses-' + anneeBilan + '.csv', ld.map(function (l) {
+        return l.map(function (c) { return '"' + String(c).replace(/"/g, '""') + '"'; }).join(';');
+      }).join('\r\n'), 'text/csv');
+      return;
+    }
+    if (action === 'regul-depuis-depenses') {
+      var bdep = trouve(state.baux, bailCourant);
+      if (!bdep) return;
+      var anneeR = val('reg-annee');
+      var propres = depensesRecuperables(anneeR, bdep.lotId);
+      var communes = totalDepenses(depensesAnnee(anneeR, null).filter(function (d) { return d.recuperable && !d.lotId; }));
+      var nbLots = state.lots.length || 1;
+      var total = propres + Math.round(communes / nbLots);
+      if (total <= 0) { toast('Aucune dépense récupérable saisie pour ' + anneeR + '.'); return; }
+      var champMontant = document.getElementById('reg-reelles');
+      if (champMontant) champMontant.value = eurosInput(total);
+      var champDetail = document.getElementById('reg-detail');
+      if (champDetail) {
+        var lignes = [];
+        depensesAnnee(anneeR, bdep.lotId).filter(function (d) { return d.recuperable; }).forEach(function (d) {
+          lignes.push(d.libelle + ' : ' + euros(d.montant));
+        });
+        depensesAnnee(anneeR, null).filter(function (d) { return d.recuperable && !d.lotId; }).forEach(function (d) {
+          lignes.push(d.libelle + ' (quote-part) : ' + euros(Math.round(d.montant / nbLots)));
+        });
+        champDetail.value = lignes.join('\n');
+      }
+      toast('Dépenses récupérables reprises : ' + euros(total) + '. Vérifiez avant d\'enregistrer.');
+      return;
+    }
+    if (action === 'export-bilan') {
+      var lg = [['annee', 'logement', 'locataire', 'appele_euros', 'encaisse_euros', 'impaye_euros', 'regularisation_euros']];
+      state.baux.forEach(function (b) {
+        var r = loyersAnnee(b, anneeBilan);
+        if (!r.du) return;
+        var reg = regularisationDe(b.id, anneeBilan);
+        lg.push([anneeBilan, nomLot(b.lotId), nomsLocataires(b), (r.du / 100).toFixed(2), (r.paye / 100).toFixed(2),
+          ((r.du - r.paye) / 100).toFixed(2), reg ? ((reg.reelles - reg.provisions) / 100).toFixed(2) : '']);
+      });
+      sauveFichier('bilan-' + anneeBilan + '.csv', lg.map(function (l) {
+        return l.map(function (c) { return '"' + String(c).replace(/"/g, '""') + '"'; }).join(';');
+      }).join('\r\n'), 'text/csv');
+      return;
+    }
+    if (action === 'appliquer-revision') {
+      var br = trouve(state.baux, bailCourant);
+      if (!br) return;
+      var iRef = parseFloat(val('rev-ref').replace(',', '.'));
+      var iNew = parseFloat(val('rev-nouveau').replace(',', '.'));
+      var effet = val('rev-effet');
+      if (!iRef || !iNew || !effet) { toast('Renseignez les deux indices et la date d\'effet.'); return; }
+      var nouveau = loyerRevise(br.loyer, iRef, iNew);
+      if (nouveau < br.loyer) {
+        confirme('Le nouvel indice fait baisser le loyer de ' + euros(br.loyer - nouveau) + '. Appliquer ?', function () {
+          appliqueRevision(br, iRef, iNew, effet, nouveau);
+          apresChangement('Révision appliquée.');
+        });
+        return;
+      }
+      appliqueRevision(br, iRef, iNew, effet, nouveau);
+      apresChangement('Loyer révisé : ' + euros(nouveau) + ' à compter du ' + frDate(effet) + '.');
+      return;
+    }
+    if (action === 'pdf-revision') {
+      var bv = trouve(state.baux, bailCourant);
+      if (!bv || !(bv.revisions || []).length) return;
+      var derniere = bv.revisions[bv.revisions.length - 1];
+      livrePdf(nomDocument(bv, 'revision-loyer-' + derniere.effetLe), buildPdf(pagesRevision(bv, derniere)));
+      return;
+    }
+    if (action === 'enregistrer-regul') {
+      var bg2 = trouve(state.baux, bailCourant);
+      if (!bg2) return;
+      var annee = val('reg-annee');
+      var reelles = centsFromInput(val('reg-reelles'));
+      if (!annee || reelles <= 0) { toast('Indiquez l\'année et le montant des charges réelles.'); return; }
+      var existante = regularisationDe(bg2.id, annee);
+      var donnees = {
+        bailId: bg2.id, annee: annee, reelles: reelles,
+        provisions: provisionsAnnee(bg2, annee), detail: val('reg-detail'), emisLe: todayISO()
+      };
+      if (existante) {
+        existante.reelles = donnees.reelles;
+        existante.provisions = donnees.provisions;
+        existante.detail = donnees.detail;
+        existante.emisLe = donnees.emisLe;
+      } else {
+        donnees.id = uid('reg');
+        state.regularisations.push(donnees);
+      }
+      journalise('charges', 'régularisation ' + annee + ' · solde ' + euros(reelles - donnees.provisions));
+      apresChangement('Régularisation enregistrée.');
+      return;
+    }
+    if (action === 'pdf-regul') {
+      var bq = trouve(state.baux, bailCourant);
+      var regPdf = bq ? regularisationDe(bq.id, btn.getAttribute('data-annee')) : null;
+      if (!regPdf) return;
+      livrePdf(nomDocument(bq, 'decompte-charges-' + regPdf.annee), buildPdf(pagesDecompteCharges(bq, regPdf)));
+      return;
+    }
+    if (action === 'relance') {
+      var er2 = trouve(state.echeances, id);
+      if (!er2) return;
+      var bRel = trouve(state.baux, er2.bailId);
+      var suivant = prochainPalier(er2.id);
+      var hist = relancesDe(er2.id);
+      var m = '<h3>Relancer ce loyer impayé</h3>';
+      m += '<p class="empty">' + esc(nomLot(bRel.lotId)) + ' · ' + esc(monthLabel(er2.mois)) + ' · reste ' + esc(euros(totalDu(er2) - totalPaye(er2))) + '</p>';
+      if (hist.length) {
+        m += '<div style="margin:12px 0">';
+        hist.forEach(function (r) {
+          m += '<div class="list-line"><span>' + (r.palier === 'amiable' ? 'Rappel amiable' : 'Mise en demeure') + '</span><span class="meta">' + esc(frDate(r.date)) + '</span></div>';
+        });
+        m += '</div>';
+      }
+      m += '<div class="row-actions" style="margin-top:14px">';
+      m += '<button class="btn' + (suivant === 'amiable' ? '' : ' ghost') + '" type="button" data-action="relance-emettre" data-id="' + er2.id + '" data-palier="amiable">Rappel amiable</button>';
+      m += '<button class="btn' + (suivant === 'amiable' ? ' ghost' : '') + '" type="button" data-action="relance-emettre" data-id="' + er2.id + '" data-palier="mise-en-demeure">Mise en demeure</button>';
+      m += '<button class="btn quiet" type="button" data-action="fermer">Fermer</button></div>';
+      m += '<p class="hint">La mise en demeure s\'envoie en recommandé avec accusé de réception. Elle prépare le commandement de payer, sans le remplacer.</p>';
+      ouvreModal(m);
+      return;
+    }
+    if (action === 'relance-emettre') {
+      var ee = trouve(state.echeances, id);
+      if (!ee) return;
+      var palier = btn.getAttribute('data-palier');
+      var be = trouve(state.baux, ee.bailId);
+      state.relances.push({ id: uid('rel'), echeanceId: ee.id, palier: palier, date: todayISO() });
+      journalise('relance', palier + ' · ' + nomLot(be.lotId) + ' · ' + ee.mois);
+      fermeModal();
+      sauvegarde();
+      rendu();
+      livrePdf(nomDocument(be, (palier === 'amiable' ? 'rappel' : 'mise-en-demeure') + '-' + ee.mois), buildPdf(pagesRelance(be, ee, palier)));
+      return;
+    }
+    if (action === 'rest-creer') {
+      var bre = trouve(state.baux, bailCourant);
+      if (!bre) return;
+      creeRestitution(bre);
+      journalise('restitution', 'préparation');
+      apresChangement('Décompte de restitution préparé.');
+      return;
+    }
+    if (action === 'rest-ajout-retenue') {
+      var brr = trouve(state.baux, bailCourant);
+      var rst = brr ? restitutionDe(brr.id) : null;
+      if (!rst) return;
+      var lib = val('ret-libelle');
+      var mnt = centsFromInput(val('ret-montant'));
+      if (!lib || mnt <= 0) { toast('Indiquez la nature et le montant de la retenue.'); return; }
+      rst.retenues.push({ libelle: lib, montant: mnt });
+      rst.remiseCles = val('rest-date') || rst.remiseCles;
+      rst.conforme = coché('rest-conforme');
+      journalise('restitution', 'retenue ' + euros(mnt));
+      apresChangement('Retenue ajoutée.');
+      return;
+    }
+    if (action === 'rest-suppr-retenue') {
+      var brs = trouve(state.baux, bailCourant);
+      var rst2 = brs ? restitutionDe(brs.id) : null;
+      var ir = parseInt(btn.getAttribute('data-index'), 10);
+      if (!rst2 || isNaN(ir)) return;
+      rst2.retenues.splice(ir, 1);
+      apresChangement('Retenue retirée.');
+      return;
+    }
+    if (action === 'pdf-restitution') {
+      var brp = trouve(state.baux, bailCourant);
+      var rst3 = brp ? restitutionDe(brp.id) : null;
+      if (!rst3) return;
+      rst3.remiseCles = val('rest-date') || rst3.remiseCles;
+      rst3.conforme = coché('rest-conforme');
+      rst3.emisLe = todayISO();
+      sauvegarde();
+      rendu();
+      livrePdf(nomDocument(brp, 'restitution-depot'), buildPdf(pagesRestitution(brp, rst3)));
+      return;
+    }
+    if (action === 'add-rappel') {
+      var lotR = trouve(state.lots, id);
+      var libR = val('rappel-libelle-' + id);
+      var dateR = val('rappel-date-' + id);
+      if (!lotR || !libR || !dateR) { toast('Indiquez le libellé et la date.'); return; }
+      lotR.rappels = lotR.rappels || [];
+      lotR.rappels.push({ libelle: libR, date: dateR, cycle: val('rappel-cycle-' + id) });
+      journalise('rappel', libR + ' · ' + frDate(dateR));
+      apresChangement('Rappel ajouté.');
+      return;
+    }
+    if (action === 'rappel-fait') {
+      var lotF = trouve(state.lots, id);
+      var iF = parseInt(btn.getAttribute('data-index'), 10);
+      if (!lotF || isNaN(iF)) return;
+      var rap = lotF.rappels[iF];
+      var ans = { '1 an': 1, '3 ans': 3, '6 ans': 6, '10 ans': 10 }[rap.cycle];
+      if (!ans) {
+        lotF.rappels.splice(iF, 1);
+      } else {
+        var d2 = new Date(rap.date);
+        d2.setFullYear(d2.getFullYear() + ans);
+        rap.date = d2.getFullYear() + '-' + String(d2.getMonth() + 1).padStart(2, '0') + '-' + String(d2.getDate()).padStart(2, '0');
+      }
+      journalise('rappel', 'fait · ' + rap.libelle);
+      apresChangement('Rappel mis à jour.');
+      return;
+    }
+    if (action === 'rappel-suppr') {
+      var lotS = trouve(state.lots, id);
+      var iS = parseInt(btn.getAttribute('data-index'), 10);
+      if (!lotS || isNaN(iS)) return;
+      lotS.rappels.splice(iS, 1);
+      apresChangement('Rappel retiré.');
+      return;
+    }
     if (action === 'fin-bail') { modalFinBail(trouve(state.baux, id)); return; }
     if (action === 'save-fin') {
       var bail = trouve(state.baux, id);
@@ -2459,6 +3662,57 @@
       return;
     }
     if (action === 'lier-fichier') { lieFichierLocal(); return; }
+    if (action === 'sync-config') {
+      state.sync = { url: val('sync-url'), cle: val('sync-cle') };
+      journalise('sync', 'configuration du serveur');
+      apresChangement(state.sync.url ? 'Adresse enregistrée.' : 'Synchronisation désactivée.');
+      return;
+    }
+    if (action === 'sync-connexion' || action === 'sync-creation') {
+      var mail = val('sync-email');
+      var mdp = val('sync-mdp');
+      if (!mail || !mdp) { toast('Indiquez l\'adresse et le mot de passe.'); return; }
+      Sync.connecte(mail, mdp, action === 'sync-creation').then(function () {
+        journalise('sync', 'connexion');
+        toast('Connecté.');
+        return Sync.synchronise(false);
+      }).then(function () { rendu(); })
+        .catch(function (err) { toast(err && err.message ? err.message : 'Connexion refusée.'); });
+      return;
+    }
+    if (action === 'sync-deconnexion') {
+      Sync.deconnecte();
+      journalise('sync', 'déconnexion');
+      apresChangement('Déconnecté. Les données restent dans ce navigateur.');
+      return;
+    }
+    if (action === 'sync-maintenant') {
+      Sync.synchronise(false).then(function () { rendu(); });
+      return;
+    }
+    if (action === 'sync-garder-serveur') {
+      if (Sync.conflit) Sync.adopte(Sync.conflit);
+      Sync.conflit = null;
+      fermeModal();
+      rendu();
+      toast('Version du serveur reprise.');
+      return;
+    }
+    if (action === 'sync-garder-local') {
+      var attendue = Sync.conflit ? Sync.conflit.version : 0;
+      Sync.conflit = null;
+      fermeModal();
+      Sync.ecrit(attendue).then(function (ligne) {
+        if (!ligne) { toast('Le serveur a encore changé : relancez la synchronisation.'); return; }
+        state.meta.versionDistante = ligne.version;
+        state.meta.majDistante = ligne.maj;
+        state.meta.modifsDepuisSync = 0;
+        sauvegarde();
+        rendu();
+        toast('Version de cet appareil envoyée.');
+      }).catch(function () { toast('Envoi impossible.'); });
+      return;
+    }
     if (action === 'confirmer-restauration') {
       if (!importJson.candidat) return;
       state = importJson.candidat;
@@ -2483,6 +3737,13 @@
   document.addEventListener('change', function (ev) {
     var el = ev.target;
     if (!el || typeof el.getAttribute !== 'function') return;
+    var cible = el.getAttribute('data-pieces');
+    if (cible && el.files && el.files.length) {
+      var parts2 = cible.split('|');
+      ajoutePieces(el.files, parts2[0], parts2[1], '');
+      el.value = '';
+      return;
+    }
     var ref = el.getAttribute('data-edl');
     if (!ref || !edlCourant) return;
     var edl = trouve(state.etatsDesLieux, edlCourant);
@@ -2512,6 +3773,10 @@
   });
 
   initStockage();
+
+  if (Sync.actif()) {
+    setTimeout(function () { Sync.synchronise(false).then(function () { rendu(); }); }, 600);
+  }
 
   if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
     window.addEventListener('load', function () {

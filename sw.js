@@ -1,5 +1,5 @@
 // Cache applicatif minimal : l'application fonctionne hors ligne, les données restent en local.
-var CACHE = 'gestion-locative-v2';
+var CACHE = 'gestion-locative-v5';
 var FICHIERS = ['./', './index.html', './manifest.webmanifest', './icone-192.png', './icone-512.png'];
 
 self.addEventListener('install', function (e) {

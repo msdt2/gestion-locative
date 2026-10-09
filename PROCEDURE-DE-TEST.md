@@ -11,16 +11,11 @@ Deux niveaux : les tests automatisés, qui vérifient les calculs et les règles
 Ils tournent avec Node et jsdom, sans navigateur.
 
 ```bash
-npm install jsdom
-node tests/test-app.js          # parc, baux, échéances, prorata, quittances
-node tests/test-bail.js         # types de bail, documents, annexes
-node tests/test-edl.js          # états des lieux, clôture, comparaison entrée/sortie
-node tests/test-sauvegarde.js   # compteur de modifications, export, restauration
-node tests/test-gestion.js      # révision IRL, charges, relances, rappels, dépôt, bilan
-node tests/test-depenses.js     # dépenses, résultat annuel, récapitulatif fiscal
-node tests/test-pieces.js       # pièces jointes (npm install fake-indexeddb)
-node tests/test-sync.js         # synchronisation serveur, contre un serveur simulé
+npm install jsdom fake-indexeddb
+node tests/lancer-tout.js
 ```
+
+Le lanceur exécute toutes les suites et affiche une ligne par suite : `vert`, `ÉCHEC`, `PLANTAGE` ou `AUCUN TEST`. Il sort en erreur dès qu'une suite n'est pas verte. Un script qui plante n'affiche aucun échec : c'est pour cela qu'on ne se fie jamais à l'absence de ligne `ECHEC`, mais au lanceur.
 
 Chaque ligne affiche `OK` ou `ECHEC`. **Un seul `ECHEC` bloque la mise en ligne.** Les PDF produits pendant les tests sont écrits sur le disque : ouvrez-en un au hasard, c'est le contrôle visuel le plus rapide.
 
@@ -45,6 +40,7 @@ Comptez trente minutes. Faites-la dans une fenêtre de navigation privée, pour 
 8. Cliquer sur **Quittance**. **Attendu** : un PDF *Quittance de loyer*, numéro suivant le précédent, loyer et charges distingués.
 9. Onglet **Quittances**, annuler le reçu partiel. **Attendu** : la ligne reste, grisée, marquée « Annulé ». Elle ne disparaît jamais.
 10. Sur une échéance déjà quittancée, essayer de retirer un paiement. **Attendu** : refus explicite, avec invitation à annuler la quittance d'abord.
+10b. **Baux**, supprimer un bail qui porte une quittance active. **Attendu** : une fenêtre explique pourquoi et propose « Annuler les quittances et supprimer le bail » ou « Garder le bail ». Après suppression, les quittances restent visibles, annulées, avec la mention « bail supprimé ».
 
 ### 2.3 Baux et documents
 

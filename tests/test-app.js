@@ -1,7 +1,7 @@
 const fs = require('fs');
 const { JSDOM } = require('jsdom');
 
-const html = fs.readFileSync('__dirname + '/../index.html'', 'utf8');
+const html = fs.readFileSync(require('path').join(__dirname,'..','index.html'), 'utf8');
 const dom = new JSDOM(html, { runScripts: 'dangerously', url: 'https://example.org/', pretendToBeVisual: true });
 const { window } = dom;
 const doc = window.document;
@@ -126,8 +126,10 @@ setTimeout(() => {
   // --- suppression bloquée
   clickByText('Baux');
   clickByText('Supprimer');
-  ok(etat().baux.length === 1, 'suppression du bail refusée car quittance émise');
-  ok(/quittances existent/.test(doc.getElementById('toast').textContent), 'message explicite: ' + doc.getElementById('toast').textContent);
+  ok(etat().baux.length === 1, 'bail conservé tant qu\'une quittance est active');
+  ok(/quittance\(s\) active\(s\)/.test(doc.getElementById('modal').textContent), 'explication affichée avec le choix');
+  clickByText('Garder le bail', doc.getElementById('modal'));
+  ok(etat().baux.length === 1, 'garder le bail ne supprime rien');
 
   // --- date de sortie et prorata final
   clickByText('Date de sortie');

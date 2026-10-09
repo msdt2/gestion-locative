@@ -1,5 +1,5 @@
 const fs=require('fs');const {JSDOM}=require('jsdom');
-const html=fs.readFileSync('__dirname + '/../index.html'','utf8');
+const html=fs.readFileSync(require('path').join(__dirname,'..','index.html'),'utf8');
 const dom=new JSDOM(html,{runScripts:'dangerously',url:'https://example.org/'});
 const {window}=dom;const doc=window.document;
 window.HTMLDialogElement.prototype.showModal=function(){this.setAttribute('open','');};
@@ -32,7 +32,7 @@ setTimeout(()=>{
   const payee=st.echeances.find(e=>e.bailId===st.baux[0].id && e.paiements.length);
   ok(payee.loyer===loyerAvant,'échéance déjà payée non recalculée');
   byText('Courrier de la dernière révision');
-  fs.writeFileSync(__dirname+'/sorties/revision.pdf'',Buffer.from(captured));
+  require('fs').mkdirSync(__dirname+'/sorties',{recursive:true});fs.writeFileSync(__dirname+'/sorties/revision.pdf',Buffer.from(captured));
 
   // ---- régularisation des charges
   const annee=String(new Date().getFullYear());
@@ -44,7 +44,7 @@ setTimeout(()=>{
   ok(reg.provisions>0,'provisions calculées depuis les échéances: '+reg.provisions);
   ok(reg.reelles===48000,'charges réelles en centimes');
   byText('Décompte');
-  fs.writeFileSync(__dirname+'/sorties/decompte.pdf'',Buffer.from(captured));
+  require('fs').mkdirSync(__dirname+'/sorties',{recursive:true});fs.writeFileSync(__dirname+'/sorties/decompte.pdf',Buffer.from(captured));
 
   // ---- relance impayé
   byText('Tableau de bord');
@@ -53,11 +53,11 @@ setTimeout(()=>{
   byText('Rappel amiable',doc.getElementById('modal'));
   st=etat();
   ok(st.relances.length===1 && st.relances[0].palier==='amiable','relance amiable enregistrée');
-  fs.writeFileSync(__dirname+'/sorties/relance.pdf'',Buffer.from(captured));
+  require('fs').mkdirSync(__dirname+'/sorties',{recursive:true});fs.writeFileSync(__dirname+'/sorties/relance.pdf',Buffer.from(captured));
   byText('Relancer');
   byText('Mise en demeure',doc.getElementById('modal'));
   ok(etat().relances.length===2,'mise en demeure enregistrée');
-  fs.writeFileSync(__dirname+'/sorties/mise-en-demeure.pdf'',Buffer.from(captured));
+  require('fs').mkdirSync(__dirname+'/sorties',{recursive:true});fs.writeFileSync(__dirname+'/sorties/mise-en-demeure.pdf',Buffer.from(captured));
 
   // ---- rappels d'entretien
   byText('Parc');
@@ -87,11 +87,11 @@ setTimeout(()=>{
   ok(st.restitutions[0].retenues[0].montant===12000,'montant de la retenue en centimes');
   ok(/À restituer/.test(vue()),'solde affiché');
   byText('Courrier de restitution');
-  fs.writeFileSync(__dirname+'/sorties/restitution.pdf'',Buffer.from(captured));
+  require('fs').mkdirSync(__dirname+'/sorties',{recursive:true});fs.writeFileSync(__dirname+'/sorties/restitution.pdf',Buffer.from(captured));
 
   // ---- bilan
   byText('Bilan');
-  ok(/Taux d'encaissement/.test(vue()),'bilan annuel affiché');
+  ok(/taux d'encaissement/i.test(vue()),'bilan annuel affiché');
   ok(/Par logement/.test(vue()),'détail par logement affiché');
   byText('Exporter cette année (CSV)');
   ok(/appele_euros/.test(captured),'export CSV du bilan');

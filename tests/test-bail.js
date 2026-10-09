@@ -1,5 +1,5 @@
 const fs=require('fs');const {JSDOM}=require('jsdom');
-const html=fs.readFileSync('__dirname + '/../index.html'','utf8');
+const html=fs.readFileSync(require('path').join(__dirname,'..','index.html'),'utf8');
 const dom=new JSDOM(html,{runScripts:'dangerously',url:'https://example.org/'});
 const {window}=dom;const doc=window.document;
 window.HTMLDialogElement.prototype.showModal=function(){this.setAttribute('open','');};
@@ -47,12 +47,12 @@ setTimeout(()=>{
 
   // génération
   byText('Bail');
-  fs.writeFileSync(__dirname+'/sorties/bail.pdf'',Buffer.from(captured));
+  require('fs').mkdirSync(__dirname+'/sorties',{recursive:true});fs.writeFileSync(__dirname+'/sorties/bail.pdf',Buffer.from(captured));
   byText('Annexes à joindre');
-  fs.writeFileSync(__dirname+'/sorties/annexes.pdf'',Buffer.from(captured));
-  byText("État des lieux d'entrée");
-  fs.writeFileSync(__dirname+'/sorties/edl.pdf'',Buffer.from(captured));
+  require('fs').mkdirSync(__dirname+'/sorties',{recursive:true});fs.writeFileSync(__dirname+'/sorties/annexes.pdf',Buffer.from(captured));
+  byText("État des lieux vierge (entrée)");
+  require('fs').mkdirSync(__dirname+'/sorties',{recursive:true});fs.writeFileSync(__dirname+'/sorties/edl.pdf',Buffer.from(captured));
   byText('Tout en un seul PDF');
-  fs.writeFileSync(__dirname+'/sorties/dossier.pdf'',Buffer.from(captured));
+  require('fs').mkdirSync(__dirname+'/sorties',{recursive:true});fs.writeFileSync(__dirname+'/sorties/dossier.pdf',Buffer.from(captured));
   console.log('PDF générés.');
 },300);

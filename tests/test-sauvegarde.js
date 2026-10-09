@@ -1,5 +1,5 @@
 const fs=require('fs');const {JSDOM}=require('jsdom');
-const html=fs.readFileSync('__dirname + '/../index.html'','utf8');
+const html=fs.readFileSync(require('path').join(__dirname,'..','index.html'),'utf8');
 const dom=new JSDOM(html,{runScripts:'dangerously',url:'https://example.org/'});
 const {window}=dom;const doc=window.document;
 window.HTMLDialogElement.prototype.showModal=function(){this.setAttribute('open','');};

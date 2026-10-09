@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Quittance — gestion locative</title>
+<title>Registre — gestion locative</title>
 <meta name="description" content="Gestion locative simple : quittances, baux et états des lieux. Vos données restent dans votre navigateur.">
 <meta name="theme-color" content="#0e6a57">
 <link rel="manifest" href="./manifest.webmanifest">
@@ -2060,6 +2060,36 @@
     return base.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') + '.pdf';
   }
 
+  function quittancesDuBail(bailId) {
+    return state.quittances.filter(function (q) {
+      if (q.bailId) return q.bailId === bailId;
+      var e = trouve(state.echeances, q.echeanceId);
+      return e && e.bailId === bailId;
+    });
+  }
+  function quittancesActivesDuBail(bailId) {
+    return quittancesDuBail(bailId).filter(function (q) { return !q.annulee; });
+  }
+  function supprimeBail(bailId) {
+    // Les quittances (toutes annulées à ce stade) sont conservées pour la continuité de la numérotation.
+    quittancesDuBail(bailId).forEach(function (q) { q.bailId = bailId; q.bailSupprime = true; });
+    var echIds = state.echeances.filter(function (e) { return e.bailId === bailId; }).map(function (e) { return e.id; });
+    var edlIds = state.etatsDesLieux.filter(function (e) { return e.bailId === bailId; }).map(function (e) { return e.id; });
+    state.relances = state.relances.filter(function (r) { return echIds.indexOf(r.echeanceId) === -1; });
+    state.regularisations = state.regularisations.filter(function (r) { return r.bailId !== bailId; });
+    state.restitutions = state.restitutions.filter(function (r) { return r.bailId !== bailId; });
+    state.etatsDesLieux = state.etatsDesLieux.filter(function (e) { return e.bailId !== bailId; });
+    state.pieces = state.pieces.filter(function (p) {
+      var lie = (p.cibleType === 'bail' && p.cibleId === bailId) ||
+        (p.cibleType === 'edl' && edlIds.indexOf(String(p.cibleId).split(':')[0]) > -1);
+      if (lie) Coffre.supprime(p.id).catch(function () { /* déjà absent */ });
+      return !lie;
+    });
+    state.echeances = state.echeances.filter(function (e) { return e.bailId !== bailId; });
+    state.baux = state.baux.filter(function (b) { return b.id !== bailId; });
+    journalise('bail', 'suppression');
+  }
+
   /* ------------------------------------------------------------ rendu : UI */
 
   var ICONES = {
@@ -2096,6 +2126,9 @@
   }
 
   function rendu() {
+    if (state && state.baux && state.baux.length && genereEcheances() > 0) {
+      sauvegarde();
+    }
     var tabs = document.getElementById('tabs');
     tabs.innerHTML = ONGLETS.map(function (o) {
       return '<button type="button" data-vue="' + o.id + '"' + (o.id === vue ? ' aria-current="page"' : '') + '>' + icone(o.id) + esc(o.nom) + '</button>';
@@ -2233,7 +2266,7 @@
     liste.forEach(function (q) {
       h += '<tr' + (q.annulee ? ' style="opacity:.55"' : '') + '>';
       h += '<td>' + esc(q.numero) + '<br><span style="font-size:12.5px;color:var(--ink-soft)">émis le ' + esc(frDate(q.emisLe)) + '</span></td>';
-      h += '<td>' + (q.annulee ? 'Annulé' : (q.type === 'quittance' ? 'Quittance' : 'Reçu partiel')) + '</td>';
+      h += '<td>' + (q.annulee ? 'Annulé' + (q.bailSupprime ? '<br><span style="font-size:12.5px;color:var(--encre-3)">bail supprimé</span>' : '') : (q.type === 'quittance' ? 'Quittance' : 'Reçu partiel')) + '</td>';
       h += '<td>' + esc(monthLabel(q.mois)) + '</td>';
       h += '<td>' + esc(q.locataire) + '</td>';
       h += '<td class="num">' + esc(euros(q.paye)) + '</td>';
@@ -2795,6 +2828,11 @@
     }
     h += '</section>';
 
+    h += '<section class="panel"><h3>Démonstration</h3>';
+    h += '<p class="empty">Ajoute deux logements, deux locataires et quelques loyers fictifs pour essayer l\'application. Ils s\'ajoutent à vos données existantes : faites-le plutôt dans une fenêtre de navigation privée, ou effacez-les ensuite.</p>';
+    h += '<div class="row-actions"><button class="btn ghost" type="button" data-action="demo-confirmer">Charger un jeu de démonstration</button></div>';
+    h += '</section>';
+
     h += '<section class="panel"><h3>Journal et effacement</h3>';
     h += '<p class="empty">' + state.journal.length + ' évènement(s) enregistré(s). Les quittances émises ne sont jamais supprimées, seulement annulées.</p>';
     h += '<div class="row-actions"><button class="btn quiet" type="button" data-action="reset">Tout effacer</button></div>';
@@ -3027,6 +3065,11 @@
     if (action === 'fermer') { fermeModal(); return; }
     if (action === 'confirm-oui') { fermeModal(); if (confirme._cb) confirme._cb(); return; }
     if (action === 'demo') { chargeDemo(); return; }
+    if (action === 'demo-confirmer') {
+      if (!state.baux.length && !state.biens.length) { chargeDemo(); return; }
+      confirme('Ajouter les données de démonstration à vos données actuelles ?', function () { chargeDemo(); });
+      return;
+    }
 
     if (action === 'mois') { moisAffiche = addMonths(moisAffiche, parseInt(btn.getAttribute('data-delta'), 10)); rendu(); return; }
     if (action === 'mois-courant') { moisAffiche = currentMonth(); rendu(); return; }
@@ -3569,17 +3612,31 @@
       return;
     }
     if (action === 'del-bail') {
-      var aDesDocs = state.quittances.some(function (q) {
-        var e = trouve(state.echeances, q.echeanceId);
-        return e && e.bailId === id;
-      });
-      if (aDesDocs) { toast('Des quittances existent sur ce bail : il ne peut plus être supprimé.'); return; }
-      confirme('Supprimer ce bail et ses échéances ?', function () {
-        state.echeances = state.echeances.filter(function (e) { return e.bailId !== id; });
-        state.baux = state.baux.filter(function (b) { return b.id !== id; });
-        journalise('bail', 'suppression');
+      var actives = quittancesActivesDuBail(id);
+      if (actives.length) {
+        var m = '<h3>Ce bail porte ' + actives.length + ' quittance(s) active(s)</h3>';
+        m += '<p class="empty">Une quittance remise à un locataire est une preuve de paiement : elle ne doit pas disparaître. Si ce bail est réel, gardez-le et posez plutôt une date de sortie.</p>';
+        m += '<p class="empty" style="margin-top:10px">S\'il a été saisi par erreur ou pour un essai, vous pouvez annuler ses quittances et le supprimer en une fois. Les quittances annulées restent visibles dans l\'onglet Quittances, avec la mention « bail supprimé », pour que la numérotation reste continue.</p>';
+        m += '<div class="row-actions" style="margin-top:16px">';
+        m += '<button class="btn" type="button" data-action="del-bail-force" data-id="' + id + '">Annuler les quittances et supprimer le bail</button>';
+        m += '<button class="btn ghost" type="button" data-action="fermer">Garder le bail</button></div>';
+        ouvreModal(m);
+        return;
+      }
+      confirme('Supprimer ce bail, ses échéances, ses états des lieux et ses documents rattachés ?', function () {
+        supprimeBail(id);
         apresChangement('Bail supprimé.');
       });
+      return;
+    }
+    if (action === 'del-bail-force') {
+      quittancesActivesDuBail(id).forEach(function (q) {
+        q.annulee = true;
+        journalise('annulation', q.numero + ' · suppression du bail');
+      });
+      fermeModal();
+      supprimeBail(id);
+      apresChangement('Quittances annulées et bail supprimé.');
       return;
     }
     if (action === 'paiement') { modalPaiement(trouve(state.echeances, id)); return; }

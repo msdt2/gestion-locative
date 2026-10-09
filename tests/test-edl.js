@@ -1,5 +1,5 @@
 const fs=require('fs');const {JSDOM}=require('jsdom');
-const html=fs.readFileSync('__dirname + '/../index.html'','utf8');
+const html=fs.readFileSync(require('path').join(__dirname,'..','index.html'),'utf8');
 const dom=new JSDOM(html,{runScripts:'dangerously',url:'https://example.org/'});
 const {window}=dom;const doc=window.document;
 window.HTMLDialogElement.prototype.showModal=function(){this.setAttribute('open','');};
@@ -41,7 +41,7 @@ setTimeout(()=>{
   ok(etat().etatsDesLieux[0].pieces.length===7,'pièce ajoutée: '+etat().etatsDesLieux[0].pieces.length);
 
   byText('Télécharger le PDF');
-  fs.writeFileSync(__dirname+'/sorties/edl-rempli.pdf'',Buffer.from(captured));
+  require('fs').mkdirSync(__dirname+'/sorties',{recursive:true});fs.writeFileSync(__dirname+'/sorties/edl-rempli.pdf',Buffer.from(captured));
 
   byText('Clôturer');byText('Confirmer',doc.getElementById('modal'));
   ok(!!etat().etatsDesLieux[0].clotureLe,'clôture enregistrée');
@@ -57,6 +57,6 @@ setTimeout(()=>{
   ok(/entrée : Bon/.test(doc.getElementById('view').textContent),'état d\'entrée affiché à l\'écran');
   setRef('piece|0|0|etat','Mauvais');
   byText('Télécharger le PDF');
-  fs.writeFileSync(__dirname+'/sorties/edl-sortie.pdf'',Buffer.from(captured));
+  require('fs').mkdirSync(__dirname+'/sorties',{recursive:true});fs.writeFileSync(__dirname+'/sorties/edl-sortie.pdf',Buffer.from(captured));
   console.log('PDF générés.');
 },300);

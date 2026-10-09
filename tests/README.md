@@ -5,15 +5,11 @@ Ils chargent `index.html` dans un DOM simulé, cliquent comme un utilisateur, et
 ## Lancer
 
 ```bash
-npm install jsdom     # une seule fois, à la racine du dépôt
-node tests/test-app.js
-node tests/test-bail.js
-node tests/test-edl.js
-node tests/test-sauvegarde.js
-node tests/test-gestion.js
+npm install jsdom fake-indexeddb     # une seule fois, à la racine du dépôt
+node tests/lancer-tout.js     # toutes les suites, avec détection des plantages
 ```
 
-Chaque ligne affiche `OK` ou `ECHEC`. Les PDF générés sont écrits dans `tests/sorties/` : ouvrez-en un pour contrôler la mise en page.
+Le lanceur affiche une ligne par suite et sort en erreur si une seule n'est pas verte. Les PDF générés sont écrits dans `tests/sorties/` : ouvrez-en un pour contrôler la mise en page.
 
 ## Ce que couvre chaque fichier
 
@@ -25,6 +21,8 @@ Chaque ligne affiche `OK` ou `ECHEC`. Les PDF générés sont écrits dans `test
 | `test-sauvegarde.js` | Compteur de modifications, export daté, remise à zéro, affichage du statut |
 | `test-gestion.js` | Révision IRL, régularisation des charges, relances par paliers, rappels d'entretien, retenues sur dépôt de garantie, bilan annuel |
 | `test-depenses.js` | Saisie des dépenses, résultat annuel, rubriques 2044, export CSV, reprise des dépenses récupérables dans la régularisation |
+| `test-ouverture.js` | Échéances du mois créées dès l'ouverture, démonstration accessible avec des données existantes |
+| `test-suppression.js` | Suppression d'un bail : blocage par une quittance active, annulation, archivage, nettoyage complet |
 | `test-sync.js` | Synchronisation serveur : connexion, premier envoi, envoi automatique, reprise d'une version distante, conflit, déconnexion. Tourne contre un faux PostgREST, sans réseau |
 | `test-pieces.js` | Coffre à fichiers : dépôt, rattachement, sauvegarde, suppression. Demande `npm install fake-indexeddb`, et s'ignore proprement sans lui |
 
